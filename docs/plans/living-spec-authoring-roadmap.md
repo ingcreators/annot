@@ -454,7 +454,7 @@ revertable; collectively they implement the 3-layer model.
 | 3 follow-up | Mosaic / blur redact raster path + `burnRedactions` relocation | ~4 PRs | annot |
 | 3 follow-up #2 | annot-annotator raster utilities (diffScreenshots relocation + flattenEditablePng + burnRegions alias) | ~3 PRs | annot |
 | 4 | Annot editor's Overlay tool + yaml writer | ~6 PRs | annot |
-| 5 | Embedded editor + GitHub round-trip | ~8 PRs | annot + annot-cloud |
+| 5 | Embedded editor + GitHub round-trip | 8 PRs OSS (5a–5h) + ~8 PRs annot-cloud (5y / 5z) | annot + annot-cloud |
 | 6 | `.annot.mdx` unified authoring surface (MDXEditor + image-click modal) | ~10 PRs (6 sub-phases) | annot |
 | 7 | Single-HTML distribution adapter (single-MDX + multi-MDX book) | ~8 PRs (7 sub-phases) | annot |
 | 8 | Unified docs via MDX (`<AnnotCardDoc>` + Create Document wizard + destructive removal of `@ingcreators/annot-doc`) | ~10 PRs (5 sub-phases) | annot |
@@ -1269,6 +1269,61 @@ annot-cloud's GitHub App integration. The button supports
 multiple **embed modes** so the same OSS component fits
 consumer / Pro / Team / Enterprise deployment scenarios.
 
+**Why this scope**: Phase 4 closed the visual-authoring half of
+the [3-layer artifact model](#the-3-layer-artifact-model) for
+local editing. Phase 5 lifts that surface into a hosted context:
+visitors of any docs site rendered by
+`@ingcreators/annot-product-docs-astro` get an "Edit" affordance
+that round-trips through annot-cloud + GitHub without the docs
+site shipping the editor itself. Combined with Phase 7's
+single-HTML distribution adapter (still ahead in the roadmap),
+the same affordance keeps working in offline-distributed docs by
+routing visitors to the configured `cloudUrl`.
+
+#### Dependencies
+
+The OSS-side pieces (5a–5h) ship out of the `annot` repo and
+are independently shippable. The end-to-end **edit-and-commit**
+loop additionally depends on the annot-cloud-side pieces
+(5y / 5z), which land in the private `ingcreators/annot-cloud`
+repo. Those in turn depend on the auth foundation in
+[`annot-cloud-roadmap.md`](./annot-cloud-roadmap.md) Phase 3
+(GitHub + Google OAuth, sessions, personal workspace
+auto-creation).
+
+| Side | Sub-phases | Repo | Depends on |
+|---|---|---|---|
+| OSS — `<AnnotEditButton>` + embed-protocol + docs-site UX | 5a–5h | `ingcreators/annot` (this repo) | only on the existing `productDocsIntegration()` Astro plumbing — ships standalone, even before annot-cloud's `/embed` route exists |
+| annot-cloud — `/embed` route + GitHub App + Worker proxy | 5y | private `ingcreators/annot-cloud` | OSS-side 5a–5c (protocol shape) + `annot-cloud-roadmap.md` Phase 3 (auth) |
+| annot-cloud — build trigger integration + on-prem deployable bundle | 5z | private `ingcreators/annot-cloud` | 5y |
+
+5a–5h can land before annot-cloud's Phase 3 — the OSS side is
+useful standalone (workflow-app docs render an Edit button that
+points at the configured `cloudUrl`; clicking it gives the
+placeholder response from that URL until annot-cloud's 5y goes
+live). The reverse is not true: 5y can't land before the OSS
+protocol exists because the new-tab / iframe consumer is on the
+OSS side and 5y serves the matching producer endpoint.
+
+#### Sub-phases
+
+| Sub | Output | Scope |
+|---|---|---|
+| **5a** | `@ingcreators/annot-embed-protocol` Tier A package skeleton — `packages/embed-protocol/`. `EmbedMode` literal type (`"newTab" \| "inline" \| "disabled"`), `EmbedEvent` discriminated union (`EditorReady` / `EditRequested` / `EditCommitted` / `EditAbandoned` / `ResizeNeeded`), per-event payload types (`{ editId, repo, pngPath, annotationsPath, commitSha?, … }`), `EMBED_PROTOCOL_VERSION = 1` constant, JSDoc cross-references between events. Pure types + constants; no runtime behaviour yet. Vitest type-level tests via `expectTypeOf` for each event variant. | New Tier A workspace package. No callers yet — pure data foundation 5b / 5c build on. Workspace dep at `0.1.0`; `private: true` until annot-cloud consumes it via npm in a later phase. |
+| **5b** | URL-callback codec for `newTab` mode. `encodeEmbedRequestUrl({cloudUrl, repo, pngPath, annotationsPath, returnUrl, mode})` builds the `${cloudUrl}/embed?…` request URL; `parseEmbedReturnHash(hash)` decodes the `#edit-complete=<editId>` (or `#edit-abandoned=1`) return fragment back into a typed `EmbedReturnSignal`. Round-trip vitest: encode + decode → byte-equivalent. Edge cases covered: missing `editId`, malformed hash, abandoned-edit signal, oversized URL (>2 KB → throws). | Tier A. Pure functions, no DOM. Sufficient on its own for the `newTab` consumer side; the iframe path layers on top in 5c. |
+| **5c** | postMessage dispatcher for `inline` mode. `createEmbedHostMessenger({ frame, expectedOrigin, onEvent })` on the docs-site side; `createEmbedClientMessenger({ parentOrigin, onEvent })` on the editor side (the latter ships in the same package so annot-cloud just `import`s it). Both wrap `window.postMessage` / `addEventListener("message")` with the discriminated-union types from 5a + origin validation + listener-cleanup helper. Vitest happy-dom covers happy-path message exchange + cross-origin rejection + double-cleanup safety. | Tier A — uses DOM globals (`window`, `MessageEvent`) but happy-dom-compatible. Editor-side client messenger has no OSS consumer yet; ships alongside the host side so 5y can `import { createEmbedClientMessenger } from "@ingcreators/annot-embed-protocol"` directly. |
+| **5d** | `<AnnotEditButton>` Astro component — `newTab` + `disabled` modes. `packages/product-docs-astro/src/components/AnnotEditButton.astro` accepts `repo` / `path` / `annotations` / `mode` / `cloudUrl` props. `mode="newTab"` (default) calls `encodeEmbedRequestUrl` from 5b + opens via `window.open`. `mode="disabled"` renders nothing. `mode="inline"` temporarily falls back to `newTab` with a one-time `console.warn` (the modal lands in 5e). SSR-safe button — no client-side JS for `mode="newTab"` beyond the `onclick` handler. Storybook stories per mode. | OSS component. Minimum-viable embed surface. Works against any `${cloudUrl}/embed?…` route satisfying the 5b URL contract — annot-cloud's 5y route is one such; on-prem instances are another. |
+| **5e** | `<AnnotEditorIframeModal>` Astro component + `<AnnotEditButton>` `mode="inline"` wiring. `packages/product-docs-astro/src/components/AnnotEditorIframeModal.astro` mounts a fullscreen modal containing an `<iframe>` pointing at the cloud editor URL, listens for `EditCommitted` / `EditAbandoned` / `ResizeNeeded` via 5c's host messenger, dismisses the modal on `EditCommitted` or `EditAbandoned`, resizes the iframe height on `ResizeNeeded`. Lazy-loaded — the modal's JS payload only ships when at least one MDX on the page uses `mode="inline"`. `<AnnotEditButton>` `mode="inline"` now triggers the modal instead of the 5d console-warn fallback. Storybook exercises the modal lifecycle with a stub `postMessage` source. | Inline mode opt-in. Requires consumer-side CSP `frame-src` whitelist + third-party cookie support per OQ-09. |
+| **5f** | `annot-docs.config.ts` `editor` config schema + Astro integration plumbing. Adds `editor?: { embedMode?: EmbedMode; cloudUrl?: string }` to the existing `ProductDocsConfig`. `productDocsIntegration(config)` threads the defaults into the Astro components via a virtual module (`virtual:annot-docs/editor-config`) — same pattern the existing `xlsx.book` config uses. Per-call props on `<AnnotEditButton>` override the global defaults. Vitest covers the precedence ladder (per-call > config > built-in default `newTab` / `https://annot.work`). | The configuration surface. Without 5f, every `<AnnotEditButton>` call requires the consumer to pass `cloudUrl`; with it, `cloudUrl` lives in one place. |
+| **5g** | Edit-complete callback handling on the rendered docs site. New `<AnnotEditCompleteListener>` Astro component, invisibly mounted (typically once per page-layout slot by `productDocsIntegration` itself). On client-side mount, parses `window.location.hash` via `parseEmbedReturnHash` from 5b; if `editId` present, renders a transient toast ("Edit saved — site rebuilds in ~1 minute") + fires an `annot:edit-complete` `CustomEvent` for downstream listeners (analytics, custom rebuild-status badges). Inline-mode `EditCommitted` from 5e flows through the same toast for symmetry. Vitest happy-dom covers the hash-parse path + the inline path + the abandoned-edit path (no toast). | The "edit done" user-visible affordance. Shipped as one component so toast styling lives in one place; consumers customise via `<slot>`. |
+| **5h** | workflow-app dogfood + docs-site authoring guide. Adds an `<AnnotEditButton>` to at least one workflow-app screen MDX (e.g. `OM-001-login`); `cloudUrl` points at a placeholder host (`https://embed.annot.work.placeholder/`) until annot-cloud 5y lands, so the workflow-app build stays green without the cloud-side prerequisite. The docs-site authoring guide (`/docs/authoring/embed-edit/`) walks through: the three embed modes + when to use which (recapping OQ-09's analysis), `annot-docs.config.ts` editor config recipe, on-prem `cloudUrl` recipe, troubleshooting (CSP / third-party-cookie issues for inline mode). | The OSS-side closeout. After 5h merges, every OSS-only consumer can render the button and read the guide; cloud-side activation lands separately as 5y / 5z in `annot-cloud`. |
+
+Each sub-phase lands as an independent PR, merged on CI green
+before the next starts, mirroring the Phase 4 cadence. Sub-phases
+5a–5c are foundational (Tier A + browser-side runtime); 5d–5g
+build the user-visible surface on top; 5h dogfoods + ships
+authoring docs.
+
 #### Embed modes
 
 The `<AnnotEditButton>` component supports three modes, selected
@@ -1312,21 +1367,58 @@ annot-cloud instance). The `inline` mode is a UX upgrade for
 consumer-grade deployments where those constraints don't
 apply.
 
-#### Files added (annot repo, OSS side)
+#### Files added (OSS — `ingcreators/annot` repo)
 
-- `packages/product-docs-astro/src/components/AnnotEditButton.astro` — MDX-mountable component. Renders an "✏️ Edit" button. Resolves embed mode from per-call `mode` prop OR `annot-docs.config.ts` `editor.embedMode`. Opens `${cloudUrl}/embed?repo=...&path=...&return=...` in new tab (default) or iframe modal (opt-in).
-- `packages/product-docs-astro/src/components/AnnotEditorIframeModal.astro` — modal wrapper for `mode: "inline"`. Lazy-loaded so `mode: "newTab"` sites don't ship the modal code.
-- `packages/annot-embed-protocol/` (new workspace package) — Tier A. Defines the protocol between docs site and editor in BOTH modes: postMessage events (for inline iframe) AND URL-callback events (for newTab, via `?return=https://docs.site/path#edit-complete=<edit-id>` redirect). Messages: `EditorReady` / `EditRequested` / `EditCommitted` / `EditAbandoned` / `ResizeNeeded`.
+- `packages/embed-protocol/` — new Tier A workspace package (5a)
+  - `src/events.ts` — `EmbedMode` + `EmbedEvent` discriminated union + `EMBED_PROTOCOL_VERSION` (5a)
+  - `src/url-callback.ts` — `encodeEmbedRequestUrl` + `parseEmbedReturnHash` (5b)
+  - `src/postmessage.ts` — `createEmbedHostMessenger` + `createEmbedClientMessenger` (5c)
+  - `src/index.ts` — public-surface barrel (5a, extended in 5b / 5c)
+  - `package.json` + `tsconfig.json` + `vite.config.ts` — package scaffolding (5a)
+- `packages/product-docs-astro/src/components/AnnotEditButton.astro` — MDX-mountable button. `newTab` + `disabled` in 5d, `inline` wiring in 5e. (5d / 5e)
+- `packages/product-docs-astro/src/components/AnnotEditButton.stories.ts` — Storybook coverage (5d)
+- `packages/product-docs-astro/src/components/AnnotEditorIframeModal.astro` — lazy-loaded modal for `mode: "inline"` (5e)
+- `packages/product-docs-astro/src/components/AnnotEditorIframeModal.stories.ts` — Storybook coverage (5e)
+- `packages/product-docs-astro/src/components/AnnotEditCompleteListener.astro` — invisible client-side listener that surfaces the post-edit toast (5g)
+- `packages/product-docs-astro/src/components/AnnotEditCompleteListener.stories.ts` — Storybook coverage (5g)
+- `packages/product-docs-astro/src/editor-config-virtual.ts` — virtual-module emitter for `editor.embedMode` / `editor.cloudUrl` defaults (5f)
+- `examples/workflow-app/docs/books/operation-manual/OM-001-login.mdx` — `<AnnotEditButton>` adoption (5h)
+- `packages/docs-site/src/content/docs/authoring/embed-edit.mdx` — docs-site authoring guide (5h)
 
-#### Files added (annot-cloud repo, paid side)
+#### Files modified (OSS — this repo)
 
-- `embed/` route in annot-cloud — receives URL params (`repo` / `pngPath` / `annotationsPath` / `return`), reads from GitHub via GitHub App credentials, mounts an editor instance. On commit:
-  - `mode=inline`: sends `EditCommitted` postMessage to parent
-  - `mode=newTab`: redirects to `${return}?edit-complete=<edit-id>` so docs site picks up the result
-- GitHub App "annot-cloud-editor" — installable on customer repos. Permissions: contents (read+write), metadata (read), pull_requests (write, for PR-mode edits).
-- Worker route in annot-cloud Workers that proxies the GitHub commit (so the editor doesn't need a user PAT — only the GitHub App's installation token).
-- Build trigger integration — after commit, the Worker pings the customer's Cloudflare Pages / Vercel / GitHub Pages build endpoint (configured per-installation).
-- **On-prem variant**: annot-cloud bundle deployable to customer infrastructure. Same `embed/` route, same GitHub App registration model, but served at customer subdomain. Customer's `<AnnotEditButton cloudUrl="https://annot.internal.example.com">` points there.
+- `packages/embed-protocol/package.json` — additive exports across 5a / 5b / 5c
+- `packages/product-docs-astro/src/index.ts` — re-export new components (5d / 5e / 5g)
+- `packages/product-docs-astro/src/integration.ts` — `productDocsIntegration(config)` reads `editor` config + injects virtual module (5f)
+- `packages/product-docs/src/config.ts` — `ProductDocsConfig` extends with optional `editor` shape (5f)
+- `pnpm-workspace.yaml` — register `packages/embed-protocol` (5a)
+
+#### Files added (annot-cloud — private `ingcreators/annot-cloud` repo, 5y / 5z)
+
+These land in a separate repo and are tracked here only as a
+forward-looking reference. The OSS-side 5a–5h do not block on
+5y / 5z (see [Dependencies](#dependencies) above).
+
+- 5y — `/embed` route serving the cloud editor surface:
+  - Reads URL params (`repo` / `pngPath` / `annotationsPath` / `return` / `mode`) via `@ingcreators/annot-embed-protocol`'s URL codec (5a / 5b).
+  - Reads PNG + annotation yaml from GitHub via GitHub App credentials.
+  - Mounts the canvas editor (`EditorShell` from `@ingcreators/annot-host-ui`).
+  - On save:
+    - `mode=inline`: posts `EditCommitted` via `createEmbedClientMessenger` to the parent docs site (5c).
+    - `mode=newTab`: redirects to `${returnUrl}#edit-complete=<editId>` (5b's hash format).
+- 5y — GitHub App "annot-cloud-editor", installable on customer repos. Permissions: contents (read+write), metadata (read), pull_requests (write, for PR-mode edits per OQ-05).
+- 5y — Worker route in annot-cloud Workers proxying the GitHub commit (so the editor doesn't need a user PAT — only the GitHub App's installation token).
+- 5z — Build trigger integration: after commit, the Worker pings the customer's Cloudflare Pages / Vercel / GitHub Pages build endpoint (configured per-installation in the annot-cloud dashboard).
+- 5z — On-prem deployable bundle: the same `/embed` route + GitHub App registration model, served at customer subdomain. Customer's `<AnnotEditButton cloudUrl="https://annot.internal.example.com">` points there.
+
+The annot-cloud-side scope above mirrors the original sketch in
+the earlier "Files added (annot-cloud repo, paid side)" version
+of this section; the only edits are the explicit references to
+the 5a / 5b / 5c protocol surface that 5y consumes, and the
+split into 5y (route + GitHub App + Worker) versus 5z (build
+trigger + on-prem). Sequencing within annot-cloud is at that
+repo's discretion; the OSS-side protocol bytes are stable after
+5c lands.
 
 #### UX flow (default `newTab` mode)
 
@@ -1389,9 +1481,24 @@ limitation.
 
 #### Verification
 
-- Integration tests in annot-cloud staging environment exercising the full GitHub round-trip against a test repo
-- Manual QA covering the conflict + permissions matrix in BOTH embed modes
-- Enterprise tier validation: deploy on-prem variant to a test environment, verify SSO redirect flow works in `newTab` mode without iframe-related fallbacks
+Per-sub-phase verification (OSS side):
+
+- **5a** — `expectTypeOf` checks cover every `EmbedEvent` variant; `EmbedMode` literal narrowing works end-to-end; the `@ingcreators/annot-embed-protocol` package builds with zero runtime dependencies (proving Tier A).
+- **5b** — `encodeEmbedRequestUrl` + `parseEmbedReturnHash` round-trip byte-equivalent across all event variants; edge cases (missing `editId`, malformed hash, abandoned signal, oversized URL) handled deterministically.
+- **5c** — happy-dom vitest covers postMessage send → receive across two windows (stubbed via `MessageChannel`); cross-origin messages are rejected; double-cleanup is safe; the editor-side client messenger compiles + type-checks even though no OSS consumer uses it yet.
+- **5d** — Storybook stories render `mode="newTab"` / `mode="disabled"` correctly; `mode="inline"` falls back to `newTab` with one `console.warn`; per-call props override the `editor-config` virtual module defaults.
+- **5e** — Storybook stories render the modal lifecycle with stub `postMessage` events; modal dismisses on `EditCommitted`; cleanup runs on dismiss; `mode="inline"` from `<AnnotEditButton>` triggers the modal instead of the 5d fallback.
+- **5f** — Vitest covers the precedence ladder (per-call > config > default `newTab` + `https://annot.work`); `productDocsIntegration({ editor: { embedMode: "inline" } })` plumbs the default end-to-end.
+- **5g** — Vitest happy-dom asserts the toast renders on `#edit-complete=<id>` page load; `annot:edit-complete` custom event fires with the correct detail shape; abandoned-edit + missing-hash paths render nothing.
+- **5h** — workflow-app Astro build green with the placeholder `cloudUrl`; the authoring guide builds via the docs-site pipeline; `<AnnotEditButton>` is keyboard-reachable + screen-reader-labelled (a11y).
+
+End-to-end verification (annot-cloud-side 5y / 5z, tracked in `annot-cloud` repo):
+
+- Integration tests in annot-cloud staging environment exercising the full GitHub round-trip against a test repo (5y + 5z together).
+- Manual QA covering the conflict + permissions matrix in BOTH embed modes (5y).
+- Enterprise tier validation: deploy on-prem variant to a test environment, verify SSO redirect flow works in `newTab` mode without iframe-related fallbacks (5z).
+
+Standard cross-cutting checks for each OSS-side PR: `pnpm -r typecheck` / `pnpm -w lint` / per-package vitest + build all green.
 
 #### Out of scope for Phase 5
 
