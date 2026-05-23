@@ -63,6 +63,49 @@ describe("defineConfig", () => {
   });
 });
 
+describe("defineConfig — editor (Phase 5f)", () => {
+  it("accepts a minimal editor block", () => {
+    const config = defineConfig({
+      editor: { embedMode: "newTab" },
+    });
+    expect(config.editor?.embedMode).toBe("newTab");
+  });
+
+  it("accepts an editor block with cloudUrl override", () => {
+    const config = defineConfig({
+      editor: {
+        embedMode: "inline",
+        cloudUrl: "https://annot.internal.example.com",
+      },
+    });
+    expect(config.editor?.cloudUrl).toBe("https://annot.internal.example.com");
+  });
+
+  it("rejects an unknown embed mode", () => {
+    expect(() =>
+      defineConfig({
+        // @ts-expect-error runtime-only guard
+        editor: { embedMode: "popup" },
+      }),
+    ).toThrow(/Invalid `annot-docs.config.ts`/);
+  });
+
+  it("rejects a non-URL cloudUrl", () => {
+    expect(() => defineConfig({ editor: { cloudUrl: "not-a-url" } })).toThrow(
+      /Invalid `annot-docs.config.ts`/,
+    );
+  });
+
+  it("rejects unknown editor sub-keys (strict)", () => {
+    expect(() =>
+      defineConfig({
+        // @ts-expect-error runtime-only guard
+        editor: { embedMode: "newTab", extra: 1 },
+      }),
+    ).toThrow(/Invalid `annot-docs.config.ts`/);
+  });
+});
+
 describe("isScreenRole", () => {
   it("defaults to true when xlsx.role is unset", () => {
     expect(isScreenRole({ id: "X" })).toBe(true);

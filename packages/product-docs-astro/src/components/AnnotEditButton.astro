@@ -32,6 +32,7 @@
 // per-call props only.
 
 import type { EmbedMode } from "@ingcreators/annot-embed-protocol";
+import { ANNOT_EDITOR_CONFIG } from "../editor-config-virtual.js";
 
 interface Props {
   /** Owner/repo slug, e.g. `"ingcreators/annot"`. */
@@ -40,12 +41,12 @@ interface Props {
   pngPath: string;
   /** Path within the repo of the linked `.annotations.yaml`. */
   annotationsPath: string;
-  /** Embed mode. Defaults to `"newTab"`. */
+  /** Embed mode. Defaults to the integration-supplied
+   *  `editor.embedMode` (or `"newTab"` if unset). */
   mode?: EmbedMode;
-  /** Cloud editor origin override (for on-prem). Defaults to
-   *  `https://annot.work`. Phase 5f introduces an
-   *  `annot-docs.config.ts` `editor.cloudUrl` default that
-   *  acts as the project-wide fallback. */
+  /** Cloud editor origin override. Defaults to the
+   *  integration-supplied `editor.cloudUrl` (or
+   *  `"https://annot.work"` if unset). */
   cloudUrl?: string;
   /** Visible button label. Defaults to `"✏️ Edit"`. */
   label?: string;
@@ -55,8 +56,8 @@ const {
   repo,
   pngPath,
   annotationsPath,
-  mode = "newTab",
-  cloudUrl = "https://annot.work",
+  mode = ANNOT_EDITOR_CONFIG.embedMode,
+  cloudUrl = ANNOT_EDITOR_CONFIG.cloudUrl,
   label = "✏️ Edit",
 } = Astro.props;
 ---

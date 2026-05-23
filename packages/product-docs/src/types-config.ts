@@ -24,10 +24,33 @@ export interface BookConfig {
   };
 }
 
+/**
+ * Project-level defaults for `<AnnotEditButton>` embed mode +
+ * cloud URL. Phase 5f of
+ * `docs/plans/living-spec-authoring-roadmap.md`. Per-call props
+ * on the component override these defaults.
+ */
+export interface AnnotEditorConfig {
+  /**
+   * Default embed mode for every `<AnnotEditButton>` in the
+   * project. Per-call `mode` prop wins when set. Default
+   * `"newTab"` (per OQ-09's analysis).
+   */
+  embedMode?: "newTab" | "inline" | "disabled";
+  /**
+   * Default cloud editor origin (e.g. `"https://annot.work"`
+   * for the hosted instance, `"https://annot.internal.example.com"`
+   * for an on-prem deployment). Per-call `cloudUrl` prop wins
+   * when set. Default `"https://annot.work"`.
+   */
+  cloudUrl?: string;
+}
+
 export interface AnnotDocsConfig {
   meta?: Record<string, unknown>;
   xlsx?: {
     defaultBook?: string;
     books?: Record<string, BookConfig>;
   };
+  editor?: AnnotEditorConfig;
 }

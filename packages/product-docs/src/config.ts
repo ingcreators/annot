@@ -55,6 +55,13 @@ const bookConfigSchema = z
   })
   .strict();
 
+const annotEditorConfigSchema = z
+  .object({
+    embedMode: z.enum(["newTab", "inline", "disabled"]).optional(),
+    cloudUrl: z.string().url("editor.cloudUrl must be an absolute URL").optional(),
+  })
+  .strict();
+
 export const annotDocsConfigSchema = z
   .object({
     meta: z.record(z.string(), z.unknown()).optional(),
@@ -65,6 +72,7 @@ export const annotDocsConfigSchema = z
       })
       .strict()
       .optional(),
+    editor: annotEditorConfigSchema.optional(),
   })
   .strict();
 
@@ -92,6 +100,7 @@ export function defineConfig(config: AnnotDocsConfig): AnnotDocsConfig {
 // from `./index.ts`.
 export type {
   AnnotDocsConfig,
+  AnnotEditorConfig,
   AnnotFrontmatter,
   BookConfig,
 } from "./types-config.js";
