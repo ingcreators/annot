@@ -119,12 +119,16 @@
 > `productDocsIntegration({ editor })` for on-prem deployments,
 > and an `<AnnotEditCompleteListener>` that surfaces a toast on
 > post-edit return. The cloud-side `/embed` route + GitHub App
-> + Worker proxy + on-prem deployable bundle (annot-cloud-side
-> 5y / 5z) land separately in the private
-> `ingcreators/annot-cloud` repo and depend on the
-> [`annot-cloud-roadmap.md`](./annot-cloud-roadmap.md) Phase 3
-> auth foundation; the OSS-side 5a–5h ship independently of
-> that work via a placeholder `cloudUrl` until 5y goes live.
+> + Worker proxy + on-prem deployable bundle (5y / 5z) land
+> next as [`annot-cloud-roadmap.md`](./annot-cloud-roadmap.md)
+> Phase 6 follow-up on the existing `packages/worker/` (not in
+> a separate private repo — only Phase 7 onward goes to the
+> private `annot-cloud` repo per the cloud-roadmap's
+> "Compatibility" note). The annot-cloud auth foundation
+> (cloud-roadmap Phase 3) that 5y depends on is already in
+> production at `annot.work/api/*`; the OSS-side 5a–5h ship
+> independently of 5y / 5z via a placeholder `cloudUrl` until
+> the cloud follow-up activates the route.
 >
 > Original plan body below was written 2026-05-22 as the synthesis of a long
 > design discussion that started from
@@ -162,10 +166,12 @@
 >
 > **Risk:** Medium. Each phase is independently shippable; the
 > architectural commitments are well-reasoned but cover a lot of
-> surface. Phase 5 (embedded editor + GitHub round-trip) lives
-> partially in `annot-cloud` (private repo) and depends on the
-> annot-cloud auth foundation in
-> [`annot-cloud-roadmap.md`](./annot-cloud-roadmap.md) Phase 3.
+> surface. Phase 5's cloud-side wiring (5y / 5z) lands as the
+> Phase 6 follow-up in
+> [`annot-cloud-roadmap.md`](./annot-cloud-roadmap.md) on the
+> existing `packages/worker/`; the annot-cloud auth foundation
+> (cloud-roadmap Phase 3) that 5y depends on has been in
+> production at `annot.work/api/*` since 2026-04.
 
 ## TL;DR
 
@@ -1310,26 +1316,28 @@ routing visitors to the configured `cloudUrl`.
 
 The OSS-side pieces (5a–5h) ship out of the `annot` repo and
 are independently shippable. The end-to-end **edit-and-commit**
-loop additionally depends on the annot-cloud-side pieces
-(5y / 5z), which land in the private `ingcreators/annot-cloud`
-repo. Those in turn depend on the auth foundation in
-[`annot-cloud-roadmap.md`](./annot-cloud-roadmap.md) Phase 3
-(GitHub + Google OAuth, sessions, personal workspace
-auto-creation).
+loop additionally depends on the cloud-side pieces (5y / 5z),
+which land as a [`annot-cloud-roadmap.md`](./annot-cloud-roadmap.md)
+Phase 6 follow-up on the existing `packages/worker/` (NOT in
+a separate private repo — only Phase 7+ goes to the private
+`annot-cloud` repo per the cloud-roadmap's "Compatibility"
+note). The auth foundation (cloud-roadmap Phase 3) that 5y
+needs already shipped: `annot.work/api/*` runs GitHub + Google
+OAuth + sessions + personal workspaces in production.
 
 | Side | Sub-phases | Repo | Depends on |
 |---|---|---|---|
-| OSS — `<AnnotEditButton>` + embed-protocol + docs-site UX | 5a–5h | `ingcreators/annot` (this repo) | only on the existing `productDocsIntegration()` Astro plumbing — ships standalone, even before annot-cloud's `/embed` route exists |
-| annot-cloud — `/embed` route + GitHub App + Worker proxy | 5y | private `ingcreators/annot-cloud` | OSS-side 5a–5c (protocol shape) + `annot-cloud-roadmap.md` Phase 3 (auth) |
-| annot-cloud — build trigger integration + on-prem deployable bundle | 5z | private `ingcreators/annot-cloud` | 5y |
+| OSS — `<AnnotEditButton>` + embed-protocol + docs-site UX | 5a–5h | `ingcreators/annot` (this repo) | only on the existing `productDocsIntegration()` Astro plumbing — ships standalone, even before the cloud-side `/embed` route exists |
+| Cloud — `/embed` route + GitHub App + Worker proxy | 5y | `ingcreators/annot` (this repo, `packages/worker/`) | OSS-side 5a–5c (protocol shape) + cloud-roadmap Phase 3 (auth — landed in production) |
+| Cloud — build trigger integration + on-prem deployable bundle | 5z | `ingcreators/annot` (this repo) | 5y |
 
-5a–5h can land before annot-cloud's Phase 3 — the OSS side is
-useful standalone (workflow-app docs render an Edit button that
-points at the configured `cloudUrl`; clicking it gives the
-placeholder response from that URL until annot-cloud's 5y goes
-live). The reverse is not true: 5y can't land before the OSS
-protocol exists because the new-tab / iframe consumer is on the
-OSS side and 5y serves the matching producer endpoint.
+5a–5h landed first (PRs [#1013](https://github.com/ingcreators/annot/pull/1013)–[#1020](https://github.com/ingcreators/annot/pull/1020))
+and are useful standalone (workflow-app docs render an Edit
+button that points at a placeholder `cloudUrl`; clicking it
+gives a "not yet wired" response until 5y goes live). The
+reverse isn't true: 5y can't land before the OSS protocol
+exists because the new-tab / iframe consumer is on the OSS
+side and 5y serves the matching producer endpoint.
 
 #### Sub-phases
 
@@ -1419,32 +1427,37 @@ apply.
 - `packages/product-docs/src/config.ts` — `ProductDocsConfig` extends with optional `editor` shape (5f)
 - `pnpm-workspace.yaml` — register `packages/embed-protocol` (5a)
 
-#### Files added (annot-cloud — private `ingcreators/annot-cloud` repo, 5y / 5z)
+#### Files added (cloud-side 5y / 5z, this repo's `packages/worker/`)
 
-These land in a separate repo and are tracked here only as a
-forward-looking reference. The OSS-side 5a–5h do not block on
-5y / 5z (see [Dependencies](#dependencies) above).
+These land as a [`annot-cloud-roadmap.md`](./annot-cloud-roadmap.md)
+Phase 6 follow-up on the existing OSS Worker — see that plan's
+"Phase 6 follow-up — Embedded editor + GitHub round-trip
+(living-spec 5y / 5z)" section for the canonical sub-phase
+breakdown + decision gates. Tracked here as forward-looking
+reference; the OSS-side 5a–5h do not block on 5y / 5z (see
+[Dependencies](#dependencies) above).
 
-- 5y — `/embed` route serving the cloud editor surface:
+- 5y — `/embed` static route at `annot.work/embed` + matching
+  `/api/embed/...` Worker endpoint:
   - Reads URL params (`repo` / `pngPath` / `annotationsPath` / `return` / `mode`) via `@ingcreators/annot-embed-protocol`'s URL codec (5a / 5b).
-  - Reads PNG + annotation yaml from GitHub via GitHub App credentials.
+  - Authorises the visitor via session (cloud-roadmap Phase 3, in production).
+  - Reads PNG + annotation yaml from GitHub via the GitHub App's installation token.
   - Mounts the canvas editor (`EditorShell` from `@ingcreators/annot-host-ui`).
   - On save:
     - `mode=inline`: posts `EditCommitted` via `createEmbedClientMessenger` to the parent docs site (5c).
     - `mode=newTab`: redirects to `${returnUrl}#edit-complete=<editId>` (5b's hash format).
-- 5y — GitHub App "annot-cloud-editor", installable on customer repos. Permissions: contents (read+write), metadata (read), pull_requests (write, for PR-mode edits per OQ-05).
-- 5y — Worker route in annot-cloud Workers proxying the GitHub commit (so the editor doesn't need a user PAT — only the GitHub App's installation token).
+- 5y — GitHub App `annot-cloud-editor`, installable on customer repos. Permissions: contents (read+write), metadata (read), pull_requests (write, for PR-mode edits per OQ-05).
+- 5y — Commit proxy endpoint in `packages/worker/src/embed/` that uses the App's installation token (so the editor doesn't need a user PAT).
 - 5z — Build trigger integration: after commit, the Worker pings the customer's Cloudflare Pages / Vercel / GitHub Pages build endpoint (configured per-installation in the annot-cloud dashboard).
-- 5z — On-prem deployable bundle: the same `/embed` route + GitHub App registration model, served at customer subdomain. Customer's `<AnnotEditButton cloudUrl="https://annot.internal.example.com">` points there.
+- 5z — On-prem deployable bundle: same Worker code, packaged for customer deployment. Customer's `<AnnotEditButton cloudUrl="https://annot.internal.example.com">` points there.
 
-The annot-cloud-side scope above mirrors the original sketch in
-the earlier "Files added (annot-cloud repo, paid side)" version
-of this section; the only edits are the explicit references to
-the 5a / 5b / 5c protocol surface that 5y consumes, and the
-split into 5y (route + GitHub App + Worker) versus 5z (build
-trigger + on-prem). Sequencing within annot-cloud is at that
-repo's discretion; the OSS-side protocol bytes are stable after
-5c lands.
+The 5y / 5z scope above is mirrored in
+[`annot-cloud-roadmap.md`'s Phase 6 follow-up section](./annot-cloud-roadmap.md#phase-6-follow-up--embedded-editor--github-round-trip-living-spec-5y--5z),
+which carries the canonical sub-phase decomposition + pricing
+tier implications. This roadmap's role is the user-facing
+contract (protocol bytes, embed modes, `<AnnotEditButton>`
+props); the cloud-roadmap's role is the operational delivery
+(Worker route, GitHub App registration, on-prem packaging).
 
 #### UX flow (default `newTab` mode)
 
@@ -2584,7 +2597,7 @@ emerges from JSX usage.
 
 - [`_done/playwright-screenshot-fixture-relayer.md`](./_done/playwright-screenshot-fixture-relayer.md) — Phase 0 of this roadmap. Landed 2026-05-22 (PRs #962 / #963 / #964 / #966).
 - [`_done/living-product-docs.md`](./_done/living-product-docs.md) — Established the docs platform this roadmap evolves. The 3-layer model is the natural progression of that plan's authoring story.
-- [`annot-cloud-roadmap.md`](./annot-cloud-roadmap.md) — Phase 3 (auth foundation) is a prerequisite for Phase 5 of this roadmap. Phase 5's GitHub App + commit logic lives in annot-cloud per [`oss-cloud-split.md`](./oss-cloud-split.md).
+- [`annot-cloud-roadmap.md`](./annot-cloud-roadmap.md) — Phases 1–6 landed in production at `annot.work/api/*`. Phase 3 (auth foundation), the prerequisite for this roadmap's Phase 5, has been live since 2026-04. Phase 5's cloud-side wiring (5y / 5z — `/embed` route + GitHub App + Worker proxy + on-prem bundle) lands as the cloud-roadmap's Phase 6 follow-up on the existing OSS `packages/worker/`; only Phase 7 onward (Stripe / billing / Enterprise SSO connectors) goes to the private `annot-cloud` repo per [`oss-cloud-split.md`](./oss-cloud-split.md).
 - [`oss-cloud-split.md`](./oss-cloud-split.md) — Phase 5's iframe boundary is the canonical example of "OSS provides the affordance, cloud provides the paid service" pattern.
 - [`launch-prep.md`](./launch-prep.md) — annot-cloud launch (Phase 8 of annot-cloud-roadmap) precedes Phase 5 of this roadmap. Phase 5 is a post-launch feature.
 - [`_done/card-document-themes.md`](./_done/card-document-themes.md) — `<annot-doc-image-editor-modal>` introduced there is the direct pattern Phase 6b reuses for `<annot-screen-editor-modal>`. The same "click image inside a document, open EditorShell in a modal, save back to the host document model" flow is generalized: card docs save inline SVG into block bytes; Phase 6 saves into annotation yaml via a separate writer. Phase 8d removes the original `<annot-doc-image-editor-modal>` along with the rest of `@ingcreators/annot-doc` per AD-13.

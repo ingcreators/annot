@@ -1,6 +1,29 @@
 # Annot product roadmap — Excalidraw-route launch
 
-> **Status:** Queued
+> **Status:** Phases 1–6 landed; Phase 6 follow-up (embedded
+> editor + GitHub round-trip, living-spec 5y / 5z) + Phase 7
+> (Stripe + Pro tier) + Phase 8 (Launch prep) queued.
+>
+> Phases 1–5 shipped through 2026-04 to 2026-05 across the
+> broader `ingcreators/annot` Worker + storage development:
+> `packages/worker/` is in production at `annot.work/api/*` with
+> GitHub + Google OAuth, multi-tenant D1 schema
+> (`users` / `workspaces` / `workspace_members` / `images` /
+> `documents` / `share_links`), `packages/cloud-store/` for the
+> client-side `AnnotCloudStore`, and the share/embed endpoints
+> behind `/api/shares/*` + `/share/:token` + `/embed/:token`.
+> Phase 6 (npm publish of `@ingcreators/annot-annotator` +
+> `@ingcreators/annot-playwright`) shipped 2026-05-19 (annotator
+> at `0.5.0`, playwright at `0.4.0`).
+>
+> The Phase 6 follow-up below — embedded editor + GitHub
+> round-trip — inserts ahead of Phase 7 Stripe based on the
+> 2026-05-23 follow-up decision that the round-trip editor is a
+> stronger free-tier anchor than rushing the paid-tier launch.
+> OSS-side pieces ([`living-spec-authoring-roadmap.md`](./living-spec-authoring-roadmap.md)
+> Phase 5 sub-phases 5a–5h) already shipped via PRs
+> [#1013](https://github.com/ingcreators/annot/pull/1013)–[#1020](https://github.com/ingcreators/annot/pull/1020).
+>
 > **Compatibility:** Touches every package (new `worker/` package,
 >   new `AnnotCloudStore` StorageProvider, new auth surface in
 >   `host-ui`, multi-tenant DB schema). New private `annot-cloud`
@@ -454,6 +477,128 @@ within this phase:
 
 **Decision gate**: `npm install @ingcreators/annot-annotator`
 from a fresh Node 24 project runs the README quickstart unmodified.
+
+### Phase 6 follow-up — Embedded editor + GitHub round-trip (living-spec 5y / 5z)  *(~3-4 weeks)*
+
+The OSS-side pieces of
+[`living-spec-authoring-roadmap.md`](./living-spec-authoring-roadmap.md)
+Phase 5 (sub-phases 5a–5h, PRs
+[#1013](https://github.com/ingcreators/annot/pull/1013)–[#1020](https://github.com/ingcreators/annot/pull/1020))
+shipped 2026-05-23. This phase adds the matching cloud-side
+wiring on the existing Worker so visitors of ANY docs site
+rendered by `@ingcreators/annot-product-docs-astro` can click
+`<AnnotEditButton>` and round-trip edits through annot.work to
+their own GitHub repo.
+
+#### Why insert this here
+
+- Phase 2–3's auth foundation (GitHub OAuth + session) is the
+  only annot-cloud-side prerequisite; it has been in
+  production at `annot.work/api/*` since the corresponding
+  sub-phases landed.
+- 5a–5h ships a working OSS button that's currently a no-op
+  pending the cloud-side route. Closing that gap unlocks an
+  immediate user-visible feature.
+- The round-trip editor is a stronger free-tier anchor than
+  rushing Stripe — visitors come for "edit your docs in one
+  click" before they consider paying for Pro. Matches the
+  Excalidraw-route positioning per
+  [`project_excalidraw_route_pivot`](../../memory/project_excalidraw_route_pivot.md).
+
+#### Sub-phases
+
+The OSS-side numbering (5a–5h) was already consumed by the
+living-spec plan; this phase uses `5y` / `5z` per that plan
+to stay consistent across both documents.
+
+- **5y-1**: Register the `annot-cloud-editor` GitHub App (App
+  ID + client secret + webhook secret stored as Worker
+  secrets). One-time GitHub-side registration. The OSS code
+  ships the installation manifest + a setup wizard for the
+  self-host path so customers can register their own App
+  against `cloudUrl` = their domain.
+- **5y-2**: `/api/embed/...` endpoint on the existing Worker.
+  Receives URL params via the `parseEmbedRequestUrl` codec
+  from `@ingcreators/annot-embed-protocol` (living-spec
+  Phase 5b), authorises the visitor via session (Phase 3),
+  checks the App is installed on the target repo, reads PNG
+  + `.annotations.yaml` via the App's installation token.
+- **5y-3**: `/embed` static route at `annot.work/embed` —
+  mounts host-ui's `EditorShell` against a GitHub-App-backed
+  StorageProvider. Posts `EditorReady` to the parent via the
+  Phase 5c client messenger (inline mode) OR loads as a
+  standalone page (newTab mode).
+- **5y-4**: Commit proxy endpoint using the App's installation
+  token. Per [OQ-05](./living-spec-authoring-roadmap.md#oq-05-pr-mode-vs-direct-push-for-github-round-trip)
+  of the living-spec roadmap, defaults to PR-mode for
+  public-repo installations + direct push for solo /
+  trusted-team installations (per-installation policy
+  configurable in the annot-cloud dashboard).
+- **5y-5**: Hash-redirect to the configured `returnUrl` per
+  the Phase 5b codec on save / abandon. The docs site's
+  Phase 5g `<AnnotEditCompleteListener>` picks up
+  `#edit-complete=<editId>` + renders the toast.
+- **5z-1**: Build trigger integration — Worker pings the
+  customer's configured Cloudflare Pages / Vercel / GitHub
+  Pages webhook on commit. Per-installation config stored in
+  the existing D1 schema (extension to the Phase 4 schema).
+- **5z-2**: On-prem deployable bundle — same Worker code,
+  packaged for customer deployment (Cloudflare deployment
+  recipe + BYO GitHub App setup wizard + customer-side
+  `<AnnotEditButton cloudUrl=...>` config recipe).
+
+#### Pricing implications
+
+Per the locked pricing tiers above, the round-trip editor
+applies asymmetrically across tiers:
+
+- **Free**: round-trip editing IS available for the user's
+  own PUBLIC GitHub repos. This is the "Excalidraw-style"
+  free-tier anchor that makes annot.work valuable even
+  without paying — same shape as Excalidraw's free-tier
+  unlimited drawing.
+- **Pro** ($5/mo): unlocks the editor for PRIVATE GitHub
+  repos, audit log of edits, per-repo embed-mode policy
+  (force `newTab` for Enterprise-style customers).
+- **Team** ($5/user/mo): adds workspace-scoped App install +
+  shared audit log.
+- **Enterprise** (per
+  [`project_annot_cloud_enterprise_tier`](../../memory/project_annot_cloud_enterprise_tier.md)):
+  on-prem `cloudUrl` deployment, SSO via Cloudflare Access,
+  custom GitHub App registration, IP allowlist.
+
+#### Repo split (OSS vs annot-cloud private)
+
+Per the top-level "Compatibility" note, only Phase 7 onward
+goes to the private `annot-cloud` repo. The 5y / 5z code
+itself (Worker route + GitHub App glue + Worker proxy +
+build trigger + on-prem bundle) lives in this OSS repo
+under `packages/worker/src/embed/` (or similar). The split
+mirrors Excalidraw / Plausible / Sentry — the editor + the
+core wiring is OSS, only billing + Enterprise-tier SSO
+connectors are private.
+
+#### Decision gate
+
+A logged-in test user clicks `<AnnotEditButton>` on the
+workflow-app docs site (the 5h dogfood), the new tab opens
+`annot.work/embed`, the editor loads a real PNG +
+annotations yaml from a test repo, the user edits + saves,
+the commit lands on the configured branch, and the docs
+site receives the post-edit hash + renders the Phase 5g
+toast. On-prem variant verified by deploying the Worker
+bundle to a test Cloudflare account and round-tripping
+against a different test repo.
+
+#### Out of scope for this phase
+
+- Stripe billing for the Pro / Team / Enterprise tiers —
+  Phase 7 remains the canonical home.
+- Real-time multi-editor collaboration on the same yaml —
+  see [`living-spec-authoring-roadmap.md`](./living-spec-authoring-roadmap.md)
+  OQ-07.
+- Mobile editor support — desktop-only in v1 per the parent
+  plan.
 
 ### Phase 7 — Stripe + Pro tier feature gates  *(3 weeks)*
 
