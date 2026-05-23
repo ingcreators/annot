@@ -42,9 +42,22 @@
 > Phase 3 ships the full annotation palette (rect / circle /
 > arrow / text / callout / freehand / redact / focusMask) as
 > additive yaml + Image Service composition on top of Phase 2's
-> overlay foundation. Mosaic / blur redact reserved for a
-> follow-up (needs raster pixel access; SVG-fragment Image
-> Service can't express them).
+> overlay foundation. Mosaic / blur redact landed as the
+> follow-up below.
+>
+> Phase 3 follow-up — Mosaic / blur redact (plan addition: [#993](https://github.com/ingcreators/annot/pull/993)):
+> [#994](https://github.com/ingcreators/annot/pull/994) (3e — relocate `burnRedactions` from `@ingcreators/annot-mcp` to `@ingcreators/annot-annotator`) /
+> [#995](https://github.com/ingcreators/annot/pull/995) (3f — yaml parser accepts `redact.style: mosaic | blur`) /
+> [#996](https://github.com/ingcreators/annot/pull/996) (3g — Astro Image Service raster pre-processing via `burnRedactions`) /
+> [#997](https://github.com/ingcreators/annot/pull/997) (3h — workflow-app OM-003 mosaic dogfood).
+>
+> Phase 3 follow-up closes the deferred raster-path scope.
+> Mosaic / blur redacts now render through `burnRedactions` on
+> the base PNG before SVG-fragment composition; solid redacts
+> continue to flow through the SVG filled-rect path. The
+> `burnRedactions` relocation also opens the primitive to
+> non-MCP callers (Astro Image Service today; future
+> Playwright fixtures, custom test reporters).
 >
 > Original plan body below was written 2026-05-22 as the synthesis of a long
 > design discussion that started from
