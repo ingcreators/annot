@@ -13,6 +13,7 @@ export {
   type HistoryCore,
   type HistoryHooks,
 } from "./history-core.js";
+export type { OverlayRegionPickDetail } from "./overlay-pick-types.js";
 export {
   CATEGORY_CONTROL_SHAPE,
   classifyPropertyElement,
