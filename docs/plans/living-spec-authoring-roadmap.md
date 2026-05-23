@@ -1094,42 +1094,150 @@ relocation itself is the value.
 
 **Goal**: Annot editor (`packages/editor` + `packages/host-ui`)
 gains the visual editing surface that produces annotation yaml
-output.
+output. After Phase 4, opening a PNG that carries a Phase 1
+`annot:elementTree` snapshot in the editor surfaces the
+hover-pickable element regions; clicking one with the new
+Overlay tool adds a numbered badge to the linked
+`.annotations.yaml` file (resolved via storage), without
+touching the PNG bytes or any MDX file. The editor becomes the
+visual authoring surface promised in the
+[3-layer artifact model](#the-3-layer-artifact-model).
 
-**Files added**:
+**Why this scope**: Phase 2 + Phase 3 stood up the annotation
+yaml format and the Astro Image Service that composes it. Phase
+4 closes the authoring half: editing the yaml visually instead
+of by hand. The "edit the visual annotations, never touch the
+MDX" simplification (per [How the editor never touches MDX](#how-the-editor-never-touches-mdx))
+keeps the editor surface scoped to one writer (yaml) instead
+of two (yaml + MDX). Phase 5's GitHub round-trip wraps Phase
+4's writer in a hosted context; Phase 6's MDXEditor mounts
+Phase 4's visual editor inside a modal triggered from an image
+block. Both later phases depend on Phase 4 shipping the
+underlying writer.
 
-- `packages/editor/src/tools/overlay-tool.ts` — new tool. Hover over a snapshot element → highlight. Click → opens "Add Overlay" dialog (intent picker + number auto-assigned).
-- `packages/host-ui/src/annotation-yaml-loader.ts` — loads annotation yaml from the storage layer associated with the host (`DeviceStore` / `VSCodeStore` / `GitHubStore`).
-- `packages/host-ui/src/annotation-yaml-writer.ts` — atomic write of annotation yaml back to storage. No PNG XMP write. No MDX write.
-- `packages/host-ui/src/snapshot-overlay.ts` — Lit component that reads PNG XMP snapshot, renders the `[box=...]` regions as semi-transparent overlay rectangles for hover/click affordance.
+#### Sub-phases
 
-**Files modified**:
+| Sub | Output | Scope |
+|---|---|---|
+| **4a** | `StorageWithDocuments` capability extension — adds optional `getAnnotationsYaml(pngPath) → string \| undefined` and `setAnnotationsYaml(pngPath, content)` to the interface in `@ingcreators/annot-core/storage/types`. Per-store implementations land in the same PR for all five built-in stores: `DeviceStore` (IDB-backed), `DesktopStore` (filesystem-backed), `VSCodeStore` (workspace fs), `GitHubStore` (git commit), `GoogleDriveStore` (Drive file). Each store resolves the yaml path by convention `<pngPath>.annotations.yaml` (`shots/login.png` → `shots/login.annotations.yaml`) so callers pass just the PNG path; per-store storage primitives handle the actual file IO. Vitest coverage per implementation; a capability-predicate roundtrip test in the core types unit test. | New Tier A surface (capability interface) + per-store impls as thin wrappers around existing read/write paths. Independent of editor changes — usable by any future caller (CLIs, MCP tools, future Playwright fixtures). |
+| **4b** | `packages/host-ui/src/annotation-yaml-loader.ts` + `annotation-yaml-writer.ts`. Loader: `loadAnnotationsYaml(store, pngPath) → AnnotationsFile \| null` — uses the Phase 2a parser, returns `null` if the store doesn't expose the capability or the file is missing (the editor falls back to "no existing overlays"). Writer: `saveAnnotationsYaml(store, pngPath, file)` — uses the Phase 2a serializer, performs read-merge-write so concurrent edits to different entries don't clobber each other (last-write-wins on conflicting `id`s; Phase 5 will optionally upgrade to ETag-based locking). Idempotent — saving an unchanged `AnnotationsFile` produces byte-identical output. | Lean wrappers around 4a + the existing Phase 2a parser/serializer. No DOM. Vitest covers idempotency + merge semantics + the missing-file → null path. |
+| **4c** | `<annot-snapshot-overlay>` Lit element in `packages/host-ui/src/snapshot-overlay.ts`. Property: `elementTree?: ElementTree`. Renders semi-transparent rects over each `ElementNode` with a `bbox`, depth-first traversal. Hover state highlights one region (and dims siblings); click fires `overlay-region-pick` CustomEvent with `{ ref, role, name, bbox }`. SVG-only output so it composes cleanly inside the editor's existing `#ui-overlay` group. Storybook stories: empty tree / single region / multi-region with hover state / nested tree (parent + children both have bboxes). | New Lit element following the host-ui conventions (Light DOM via `createRenderRoot() { return this; }`, `static properties` API). Reads ElementTree from the Phase 1 PNG XMP via the host's existing read path. No coupling to Overlay tool — usable as a standalone hover-pick surface for future tools (e.g. a future card-document `<AnnotCardStep target>` picker). |
+| **4d** | `OverlayTool` in `packages/editor/src/tools/overlay-tool.ts`. Extends `ToolBase`. On activation it mounts `<annot-snapshot-overlay>` into the canvas `#ui-overlay`, subscribes to `overlay-region-pick`, opens an "Add overlay" inline dialog (intent picker — required / action / info — plus a preview of the proposed `match: { role, name }`), and on confirm emits an `OverlayEntry` to its `onCommit(entry)` callback. Number auto-assigned as `max(existing.number, 0) + 1` from the loaded `AnnotationsFile.overlays`. The dialog reuses the `<annot-dialog>` pattern from the redact burn-in confirm flow. Vitest covers the pointer flow + the number auto-assign + the "click-but-cancel" path. | Tier C — needs live pointer events + Lit element mounting. Independently testable via the existing tool test harness (`makeCanvas` / `makeHistory` helpers per CLAUDE.md §10). |
+| **4e** | TOOL_REGISTRY entry + factory + EditorShell integration. New entry in `packages/core/src/editor/tool-registry.ts` with `id: "overlay"`, `label: "Overlay"`, `category: "annotation"`, no variants (single mode). New factory entry in `packages/web/src/editor/tool-factories.ts` constructing `OverlayTool` with the per-image overlays-yaml context. The schema-driven toolbar (per CLAUDE.md §6's tool-registry rules) picks up the entry automatically — no `toolbar.ts` changes. `EditorShell.mountFromRecord` accepts an optional `annotationsYamlPath?: string` parameter; when set, the shell (a) loads the yaml on mount via the Phase 4b loader and seeds the OverlayTool's existing-entries list + the snapshot-overlay's `existing-overlays` decoration, (b) on each tool commit, writes via the Phase 4b writer. The shell exposes `getCurrentAnnotationsYaml()` for hosts that need to read the in-memory state. | Wires 4a–4d together. The EditorShell change is small (~50 lines including loader/writer plumbing). Vitest covers the registry membership + the factory wiring symmetry + the mount → load → tool-commit → save loop. |
+| **4f** | workflow-app dogfood + opportunistic "Save as flat PNG" affordance using `flattenEditablePng`. workflow-app gains a Playwright test that opens an annotated PNG in the editor (via the existing host harness), uses the Overlay tool to add a numbered badge over a textbox, saves, and verifies the resulting `.annotations.yaml` matches the expected fixture byte-for-byte. Additionally, `<annot-save-menu>` gets a new "Save as flat PNG" entry backed by `flattenEditablePng` from `@ingcreators/annot-annotator` — the EditorShell exposes a small `publishFlatPng(record) → Promise<Uint8Array>` helper that strips the editable layer's metadata before download. (Diff-preview via `diffScreenshots` and region-burn via `burnRegions` are reserved for follow-ups — Phase 4 keeps the scope tight.) | End-to-end dogfood + the first user-visible integration of the Phase 3 follow-up #2 annotator primitives. The dogfood test is the canonical verification that the entire Phase 4 surface (storage + loader/writer + tool + registry + shell) holds together. The `flattenEditablePng` integration is two function calls (host-ui invokes the annotator primitive); no new architecture. |
 
-- `packages/editor/src/canvas-manager.ts` — registers the new tool. Tool palette UI gets a new "Overlay" button distinct from the existing rect/arrow/callout.
-- `packages/host-ui/src/editor-shell.ts` — `EditorShell.mountFromRecord` accepts an optional `annotationsYamlPath` parameter. When set, the shell loads the yaml on mount and saves to it on every annotation edit.
+Each sub-phase lands as an independent PR, merged on CI green
+before the next starts, mirroring the Phase 2 / Phase 3 cadence.
 
-**Storage adapter changes**:
+#### Files added
 
-- `StorageWithDocuments` capability extended with `getAnnotationsYaml(pngPath) → string` and `setAnnotationsYaml(pngPath, content)` methods. Optional on the base interface; feature code checks `if (store.getAnnotationsYaml)`.
-- `DeviceStore` / `DesktopStore` / `VSCodeStore` / `GitHubStore` / `GoogleDriveStore` each implement the new methods.
+- `packages/host-ui/src/annotation-yaml-loader.ts` — loader (4b)
+- `packages/host-ui/src/annotation-yaml-loader.test.ts` — vitest (4b)
+- `packages/host-ui/src/annotation-yaml-writer.ts` — writer (4b)
+- `packages/host-ui/src/annotation-yaml-writer.test.ts` — vitest (4b)
+- `packages/host-ui/src/snapshot-overlay.ts` — Lit element (4c)
+- `packages/host-ui/src/snapshot-overlay.stories.ts` — Storybook coverage (4c)
+- `packages/editor/src/tools/overlay-tool.ts` — tool implementation (4d)
+- `packages/editor/src/tools/overlay-tool.test.ts` — vitest (4d)
+- `examples/workflow-app/tests/overlay-tool.spec.ts` — Playwright dogfood (4f)
 
-**UX flow**:
+#### Files modified
+
+- `packages/core/src/storage/types.ts` — `StorageWithDocuments` extension (4a)
+- `packages/web/src/storage/device-store.ts` — implementation (4a)
+- `packages/desktop/src/storage/desktop-store.ts` — implementation (4a)
+- `packages/vscode/src/storage/vscode-store.ts` — implementation (4a)
+- `packages/web/src/storage/github-store.ts` — implementation (4a)
+- `packages/web/src/storage/google-drive-store.ts` — implementation (4a)
+- `packages/core/src/editor/tool-registry.ts` — `overlay` entry (4e)
+- `packages/web/src/editor/tool-factories.ts` — `OverlayTool` factory (4e)
+- `packages/host-ui/src/editor-shell.ts` — `mountFromRecord` plumbing + `publishFlatPng` helper (4e + 4f)
+- `packages/host-ui/src/annot-save-menu.ts` — "Save as flat PNG" entry (4f)
+
+#### Storage adapter changes (4a)
+
+`StorageWithDocuments` extension:
+
+```ts
+export interface StorageWithDocuments {
+  // … existing methods …
+  /** Reads the `.annotations.yaml` paired with `pngPath`. Returns `undefined` if absent. */
+  getAnnotationsYaml?(pngPath: string): Promise<string | undefined>;
+  /** Writes the `.annotations.yaml` paired with `pngPath`. Creates the file if absent. */
+  setAnnotationsYaml?(pngPath: string, content: string): Promise<void>;
+}
+```
+
+Both methods are optional (`?`). Feature code checks
+`if (store.getAnnotationsYaml)` before calling — keeps
+third-party stores opt-in. The convention
+`<pngPath>.annotations.yaml` is encoded in the per-store
+implementation, not in the interface. A caller never sees the
+yaml path directly; this hides per-store path encoding
+(GitHub's flat tree vs Drive's folder IDs vs IDB's keyed
+records).
+
+#### UX flow
 
 ```
 1. User opens login.png in Annot editor (any host)
-2. Editor detects PNG XMP snapshot → shows hover hotspots
-3. Editor detects (via MDX context or PNG XMP "annotations-ref" hint) the linked yaml path
-4. Editor loads yaml → renders existing overlays + annotations as visual marks
-5. User clicks "Overlay" tool → clicks Email textbox → adds overlay
-   - Annot proposes match={ role: "textbox", name: "Email" } from the clicked element
-   - User picks intent (required / action / info)
-   - Number auto-assigned (next available)
-6. Save → yaml is rewritten with new entry. PNG untouched. MDX untouched.
+2. Editor reads PNG XMP → ImageRecord.elementTree populated (Phase 1)
+3. Editor checks for annotation yaml via store.getAnnotationsYaml(pngPath) (Phase 4a)
+4. EditorShell loads yaml + seeds the OverlayTool's existing-entries (Phase 4b/4e)
+5. User clicks the "Overlay" toolbar button → OverlayTool activates (Phase 4d/4e)
+6. <annot-snapshot-overlay> mounts → hover regions become visible (Phase 4c)
+7. User hovers the Email textbox region → it highlights
+8. User clicks → "Add overlay" dialog opens with proposed:
+     match: { role: "textbox", name: "Email" }
+     intent picker: required (default for textboxes) | action | info
+     number: 1 (auto-assigned, next available)
+9. User confirms → OverlayTool emits OverlayEntry → EditorShell writes
+   via store.setAnnotationsYaml(pngPath, serializeAnnotationsYaml(updated))
+10. PNG untouched. MDX untouched. Only the .annotations.yaml file changed.
 ```
 
-**Verification**: Storybook stories cover the tool's modes
-(hovering / clicking / editing existing). Vitest tests cover the
-yaml writer's idempotency and atomicity.
+#### `@ingcreators/annot-annotator` primitive integration
+
+Phase 3 follow-up #2 consolidated three Node-side raster
+primitives at `@ingcreators/annot-annotator`. Phase 4 picks up
+the first as a user-visible affordance:
+
+- **`flattenEditablePng`** (4f) — "Save as flat PNG" entry in the save menu. Strips the editable layer's XMP / `svGo` chunks for distribution-ready PNG output. The host-ui side is two function calls (read editable bytes → `flattenEditablePng` → download).
+- **`burnRegions`** — Not used in Phase 4. Reserved for a Phase 4 follow-up if the editor gains a "burn redacts before download" affordance (parallel to the existing `applyAllRedactions` destructive bake — note the [redact burn-in path](#things-to-leave-alone-unless-explicitly-asked) is load-bearing for the privacy contract per CLAUDE.md).
+- **`diffScreenshots`** — Not used in Phase 4. Reserved for a Phase 4 follow-up if a "diff preview" affordance lands (visual diff between current-edit and last-saved annotation state, useful for code review).
+
+The Phase 4 scope keeps the diff + burn integrations out —
+they're nice-to-haves that don't gate the visual-authoring
+core. Both can land as Phase 4 follow-up PRs once the rest of
+the surface is stable.
+
+#### Schema versioning
+
+No schema changes. Phase 4 produces files matching the
+Phase 2a `AnnotationsFile` schema (`version: 1`). The
+`OverlayEntry`s emitted by the Overlay tool follow the same
+shape as those Phase 2's migration CLI emitted — the editor
+is a second producer of the same format.
+
+#### Verification
+
+- **4a** — Per-store vitest covering `set` then `get` returns identical bytes; `get` on a missing file returns `undefined`; the capability predicate `supportsDocuments` continues to identify each store correctly.
+- **4b** — Vitest covering: (1) loader returns `null` when the store lacks the capability; (2) loader returns `null` when the file is missing; (3) loader parses successfully when the file exists; (4) writer is idempotent (round-trip through serializer is byte-stable); (5) writer's read-merge-write preserves entries the caller didn't touch.
+- **4c** — Storybook stories render each visual state. Lit element click handler fires the CustomEvent with the expected detail shape. Vitest covers the hover state transitions.
+- **4d** — Vitest covers: pointer-down → dialog opens; intent pick + confirm → `onCommit` fires with correct entry; cancel → no `onCommit` fires; number auto-assigns to `max + 1`.
+- **4e** — TOOL_REGISTRY membership symmetry test passes; factory entry constructs an `OverlayTool` correctly; `EditorShell.mountFromRecord({ annotationsYamlPath })` end-to-end test loads yaml + wires writer.
+- **4f** — workflow-app Playwright test passes; the resulting `.annotations.yaml` matches a frozen fixture; `<annot-save-menu>` Storybook story for the new entry; vitest for `publishFlatPng` returning bytes that parse as PNG with no Adobe XMP / `svGo` chunks.
+- Standard cross-cutting: `pnpm -r typecheck` / `pnpm -w lint` / per-package vitest + build all green at each PR.
+
+#### Out of scope for Phase 4
+
+- **Editing existing overlays** beyond add (drag to re-anchor, change intent, edit `match` keys, delete). The first PR ships add-only; edit / delete are deliberate follow-up scope to keep the visual-authoring core small. The OverlayTool can render existing entries (decorative, no interaction) but doesn't mutate them.
+- **`annotations[]` palette in the editor.** Phase 4 wires up the numbered-badge `overlays[]` writer only. The full annotation palette (rect / circle / arrow / text / callout / freehand / redact / focusMask) is a Phase 4 follow-up; the underlying yaml format already supports it (per Phase 3a) and the storage capability already supports it (4a is annotation-shape-agnostic) — only the per-shape tool affordances are deferred.
+- **Diff preview** via `diffScreenshots`. See the primitive integration section above.
+- **Region-burn affordance** via `burnRegions`. See the primitive integration section above.
+- **Multi-PNG batch overlay-add** (point the editor at a folder + propagate one overlay across N PNGs). Reserved for if the use case emerges.
+- **PR-mode editing** (creating a branch + PR for the yaml edit). Phase 5's `<AnnotEditButton>` flow handles this server-side; Phase 4 is local-edit only.
+- **MDX context detection** (the editor sniffing which `.annotations.yaml` is referenced by which MDX). Phase 4's caller (host shell, future MDXEditor) passes the path explicitly via `annotationsYamlPath`; resolution lives in the caller. Phase 6's MDXEditor descriptor handles the MDX-side path lookup.
 
 ### Phase 5 — Embedded editor + GitHub round-trip
 
