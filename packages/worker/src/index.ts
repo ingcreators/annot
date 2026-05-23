@@ -23,6 +23,7 @@
 //   - /api/shares/:token/payload             (GET public bytes)
 //   - /api/embed/health                      (5y-1 — GitHub App secret-binding status)
 //   - /api/embed/setup                       (5y-1 — App registration manifest-flow page)
+//   - /api/embed/load                        (5y-2 — reads PNG + annotations yaml via App installation token)
 //   - per-workspace plan-gated quotas on POST /api/images, POST
 //     /api/documents, PATCH /api/documents/:id/content, POST
 //     /api/shares (Phase 4e + 5)
@@ -56,6 +57,7 @@ import {
   handleDocumentPatch,
   handleDocumentUpload,
 } from "./documents.js";
+import { handleEmbedLoad } from "./embed/load.js";
 import { handleEmbedHealth, handleEmbedSetupPage } from "./embed/routes.js";
 import {
   handleImageAnnotationsGet,
@@ -314,6 +316,7 @@ app.get("/api/shares/:token/payload", handleSharePayload);
 // + /commit + /webhook + /setup/callback endpoints land in 5y-2+.
 app.get("/api/embed/health", handleEmbedHealth);
 app.get("/api/embed/setup", handleEmbedSetupPage);
+app.get("/api/embed/load", handleEmbedLoad);
 
 /**
  * Catch-all 404 so probes against an undefined route return a

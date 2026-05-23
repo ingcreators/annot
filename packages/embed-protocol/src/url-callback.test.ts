@@ -10,6 +10,7 @@ import {
   encodeEmbedRequestUrl,
   encodeEmbedReturnHash,
   MAX_EMBED_REQUEST_URL_BYTES,
+  parseEmbedRequestUrl,
   parseEmbedReturnHash,
 } from "./url-callback.js";
 
@@ -263,5 +264,105 @@ describe("URL-callback round-trip", () => {
       const parsed = parseEmbedReturnHash(encoded);
       expect(parsed).toEqual(signal);
     }
+  });
+});
+
+describe("parseEmbedRequestUrl", () => {
+  const fullUrl =
+    "https://annot.work/embed?repo=ing%2Fannot&pngPath=a.png&annotationsPath=a.yaml&return=https%3A%2F%2Fdocs%2Eexample%2Ecom%2Fpage&mode=newTab&v=1";
+
+  it("parses a fully-formed encoded URL", () => {
+    const parsed = parseEmbedRequestUrl(fullUrl);
+    expect(parsed).toEqual({
+      repo: "ing/annot",
+      pngPath: "a.png",
+      annotationsPath: "a.yaml",
+      returnUrl: "https://docs.example.com/page",
+      mode: "newTab",
+      version: 1,
+    });
+  });
+
+  it("round-trips encode → parse byte-equivalent for every mode", () => {
+    for (const mode of ["newTab", "inline", "disabled"] as const) {
+      const encoded = encodeEmbedRequestUrl({
+        cloudUrl: "https://annot.work",
+        repo: "ing/annot",
+        pngPath: "p.png",
+        annotationsPath: "p.yaml",
+        returnUrl: "https://docs.example.com/x",
+        mode,
+      });
+      const parsed = parseEmbedRequestUrl(encoded);
+      expect(parsed).toEqual({
+        repo: "ing/annot",
+        pngPath: "p.png",
+        annotationsPath: "p.yaml",
+        returnUrl: "https://docs.example.com/x",
+        mode,
+        version: 1,
+      });
+    }
+  });
+
+  it("accepts a URL instance", () => {
+    const parsed = parseEmbedRequestUrl(new URL(fullUrl));
+    expect(parsed.repo).toBe("ing/annot");
+  });
+
+  it("accepts a query-string-only input", () => {
+    const parsed = parseEmbedRequestUrl(
+      "?repo=foo%2Fbar&pngPath=a.png&annotationsPath=a.yaml&return=https%3A%2F%2Fdocs%2Eexample%2Ecom%2Fp",
+    );
+    expect(parsed.repo).toBe("foo/bar");
+  });
+
+  it("accepts a URLSearchParams input", () => {
+    const params = new URLSearchParams({
+      repo: "foo/bar",
+      pngPath: "a.png",
+      annotationsPath: "a.yaml",
+      return: "https://docs.example.com/p",
+    });
+    const parsed = parseEmbedRequestUrl(params);
+    expect(parsed.mode).toBe("newTab");
+  });
+
+  it("defaults mode to newTab when missing", () => {
+    const parsed = parseEmbedRequestUrl(
+      "?repo=a%2Fb&pngPath=p&annotationsPath=p&return=https%3A%2F%2Fdocs%2Eexample%2Ecom%2Fp",
+    );
+    expect(parsed.mode).toBe("newTab");
+  });
+
+  it("normalises an unknown mode to newTab", () => {
+    const parsed = parseEmbedRequestUrl(
+      "?repo=a%2Fb&pngPath=p&annotationsPath=p&return=https%3A%2F%2Fdocs%2Eexample%2Ecom%2Fp&mode=mystery",
+    );
+    expect(parsed.mode).toBe("newTab");
+  });
+
+  it("throws on missing required parameter", () => {
+    expect(() =>
+      parseEmbedRequestUrl("?repo=a%2Fb&pngPath=p&return=https%3A%2F%2Fdocs%2Eexample%2Ecom%2Fp"),
+    ).toThrow(EmbedRequestUrlError);
+  });
+
+  it("throws on relative returnUrl", () => {
+    expect(() =>
+      parseEmbedRequestUrl("?repo=a%2Fb&pngPath=p&annotationsPath=p&return=%2Frelative%2Fpath"),
+    ).toThrow(EmbedRequestUrlError);
+  });
+
+  it("throws on malformed full URL", () => {
+    expect(() => parseEmbedRequestUrl("ht tp://broken")).toThrow(EmbedRequestUrlError);
+  });
+
+  it("throws on non-positive version", () => {
+    expect(() =>
+      parseEmbedRequestUrl(
+        "?repo=a%2Fb&pngPath=p&annotationsPath=p&return=https%3A%2F%2Fdocs%2Eexample%2Ecom%2Fp&v=0",
+      ),
+    ).toThrow(EmbedRequestUrlError);
   });
 });

@@ -33,11 +33,16 @@ export {
   createEmbedClientMessenger,
   createEmbedHostMessenger,
 } from "./postmessage.js";
-export type { EmbedRequestParams, EmbedReturnSignal } from "./url-callback.js";
+export type {
+  EmbedRequestParams,
+  EmbedReturnSignal,
+  ParsedEmbedRequest,
+} from "./url-callback.js";
 export {
   EmbedRequestUrlError,
   encodeEmbedRequestUrl,
   encodeEmbedReturnHash,
   MAX_EMBED_REQUEST_URL_BYTES,
+  parseEmbedRequestUrl,
   parseEmbedReturnHash,
 } from "./url-callback.js";
