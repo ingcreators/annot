@@ -21,12 +21,13 @@
 
 import { readFile } from "node:fs/promises";
 import { dirname, isAbsolute, resolve } from "node:path";
-import { type BboxAnnotation, createAnnotator } from "@ingcreators/annot-annotator";
+import { type BboxAnnotation, burnRedactions, createAnnotator } from "@ingcreators/annot-annotator";
 import { readElementTreePng } from "@ingcreators/annot-core";
 import {
   type AnnotationsFile,
   buildBadgeAnnotations,
   buildBadgeAnnotationsFromYaml,
+  buildRasterRedactRegionsFromYaml,
   buildShapeAnnotationsFromYaml,
   elementTreeToBoxedEntries,
   emptyAnnotationsSvg,
@@ -159,8 +160,8 @@ export async function renderAnnotatedScreen(
     }
   }
 
-  const baseBytes = options.basePngBytes ?? (await loadBasePng(parsed, screen.src, mdxDir));
-  const dims = readPngDimensions(baseBytes);
+  const originalBaseBytes = options.basePngBytes ?? (await loadBasePng(parsed, screen.src, mdxDir));
+  const dims = readPngDimensions(originalBaseBytes);
   // Prefer the canonical `annot:elementTree` PNG XMP chunk (Phase
   // 1d) when present — that's where post-migration PNGs carry
   // their boxed elements. Fall back to the legacy
@@ -169,7 +170,7 @@ export async function renderAnnotatedScreen(
   // has migrated.
   let bboxes: ReturnType<typeof parseSnapshotBoxes>;
   let bboxSource: "elementTreeXmp" | "legacySnapshotBlock";
-  const elementTree = safeReadElementTree(baseBytes);
+  const elementTree = safeReadElementTree(originalBaseBytes);
   if (elementTree) {
     bboxes = elementTreeToBoxedEntries(elementTree);
     bboxSource = "elementTreeXmp";
@@ -180,6 +181,25 @@ export async function renderAnnotatedScreen(
   // `bboxSource` is reserved for future telemetry; suppress the
   // unused-var diagnostic without changing the variable shape.
   void bboxSource;
+
+  // Phase 3g: raster-style redact (mosaic / blur) needs the
+  // underlying screenshot bitmap, not an SVG fragment. Walk the
+  // yaml's `annotations[]` for those entries, resolve their
+  // cutouts to bboxes, and burn them onto the base PNG BEFORE
+  // SVG-fragment composition. `style: solid` (or unset) redacts
+  // stay on the SVG path via `buildShapeAnnotationsFromYaml`.
+  //
+  // The cache key already includes the annotations-yaml source
+  // (Phase 2b), so editing a yaml `style: mosaic` value busts
+  // the cached PNG without additional bookkeeping.
+  const rasterRedacts =
+    annotationsFile && annotationsFile.file.annotations
+      ? buildRasterRedactRegionsFromYaml(annotationsFile.file.annotations, bboxes)
+      : [];
+  const baseBytes =
+    rasterRedacts.length > 0
+      ? await burnRedactions(originalBaseBytes, rasterRedacts)
+      : originalBaseBytes;
   // Phase 2b: when the screen carries an `annotations="…"` prop,
   // yaml-driven overlays take precedence over inline `<Overlay>`
   // children. Both paths produce identical `BboxNumberedBadgeAnnotation`
@@ -218,11 +238,18 @@ export async function renderAnnotatedScreen(
   let result: Uint8Array;
   let hadBoundingBoxes: boolean;
   if (annotations.length === 0) {
-    hadBoundingBoxes = false;
+    // No SVG-side annotations. The `hadBoundingBoxes` flag tells
+    // the Astro plugin "we used the snapshot's bbox data to
+    // produce a useful render"; raster redacts (mosaic / blur)
+    // resolved through bbox data too even though they're not in
+    // the SVG layer, so flip the flag true when any of them
+    // burned onto the base.
+    hadBoundingBoxes = rasterRedacts.length > 0;
     if (editable !== null) {
       // No overlays to bake, but the caller still wants an editable
-      // file — wrap the base PNG with an empty annotations layer so
-      // re-opening in Annot loads the un-annotated capture.
+      // file — wrap the (possibly raster-burned) base PNG with an
+      // empty annotations layer so re-opening in Annot loads the
+      // un-annotated capture.
       const dataUrl = `data:image/png;base64,${Buffer.from(baseBytes).toString("base64")}`;
       result = createAnnotator({ loadSystemFonts: true }).toEditablePng({
         originalDataUrl: dataUrl,

@@ -99,6 +99,7 @@ export type { BoxedEntry } from "./mdx-annotations.js";
 export {
   buildBadgeAnnotations,
   buildBadgeAnnotationsFromYaml,
+  buildRasterRedactRegionsFromYaml,
   buildShapeAnnotationsFromYaml,
   elementTreeToBoxedEntries,
   emptyAnnotationsSvg,
