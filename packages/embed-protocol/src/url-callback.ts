@@ -133,6 +133,94 @@ export function encodeEmbedRequestUrl(params: EmbedRequestParams): string {
 }
 
 /**
+ * Result shape returned by `parseEmbedRequestUrl`. Mirrors
+ * `EmbedRequestParams` field-for-field, with the optional
+ * `mode` resolved to its default (`"newTab"`) so cloud-side
+ * callers don't repeat the fallback. The `version` field is
+ * parsed from `?v=` so the cloud editor can detect a future
+ * docs-site that ships v2 of the protocol.
+ */
+export interface ParsedEmbedRequest {
+  readonly repo: string;
+  readonly pngPath: string;
+  readonly annotationsPath: string;
+  readonly returnUrl: string;
+  readonly mode: EmbedMode;
+  readonly version: number;
+}
+
+/**
+ * Cloud-side parser for the URL `encodeEmbedRequestUrl` produces.
+ * Accepts either the full request URL (`https://annot.work/embed?…`)
+ * or just the query string (`?repo=…&…` or `repo=…&…`).
+ *
+ * Throws `EmbedRequestUrlError` on missing / malformed fields so
+ * the cloud `/embed` route can surface a stable 400 to the
+ * visitor without speculatively running with partial state. Future
+ * docs sites that ship a higher protocol version surface here as
+ * a non-error — callers decide whether to accept it.
+ */
+export function parseEmbedRequestUrl(
+  urlOrSearch: string | URL | URLSearchParams,
+): ParsedEmbedRequest {
+  let params: URLSearchParams;
+  if (urlOrSearch instanceof URLSearchParams) {
+    params = urlOrSearch;
+  } else if (urlOrSearch instanceof URL) {
+    params = urlOrSearch.searchParams;
+  } else if (urlOrSearch.startsWith("?") || !urlOrSearch.includes("://")) {
+    // Treat anything without a scheme as a raw query string. Strip
+    // a leading `?` if present so `URLSearchParams` handles both
+    // `?foo=1` and `foo=1`.
+    const trimmed = urlOrSearch.startsWith("?") ? urlOrSearch.slice(1) : urlOrSearch;
+    params = new URLSearchParams(trimmed);
+  } else {
+    try {
+      params = new URL(urlOrSearch).searchParams;
+    } catch {
+      throw new EmbedRequestUrlError(
+        `embed-request URL is not a valid absolute URL: ${urlOrSearch}`,
+      );
+    }
+  }
+
+  const required = (name: string): string => {
+    const value = params.get(name);
+    if (!value) {
+      throw new EmbedRequestUrlError(`embed-request URL missing required parameter "${name}"`);
+    }
+    return value;
+  };
+
+  const repo = required("repo");
+  const pngPath = required("pngPath");
+  const annotationsPath = required("annotationsPath");
+  const returnUrl = required("return");
+
+  // Validate `returnUrl` is absolute so the cloud editor's later
+  // hash-redirect lands somewhere reachable.
+  try {
+    new URL(returnUrl);
+  } catch {
+    throw new EmbedRequestUrlError(`embed-request URL "return" must be absolute: ${returnUrl}`);
+  }
+
+  const modeRaw = params.get("mode");
+  const mode: EmbedMode =
+    modeRaw === "inline" || modeRaw === "disabled" || modeRaw === "newTab" ? modeRaw : "newTab";
+
+  const versionRaw = params.get("v");
+  const version = versionRaw ? Number.parseInt(versionRaw, 10) : 1;
+  if (!Number.isFinite(version) || version < 1) {
+    throw new EmbedRequestUrlError(
+      `embed-request URL "v" must be a positive integer: ${versionRaw}`,
+    );
+  }
+
+  return { repo, pngPath, annotationsPath, returnUrl, mode, version };
+}
+
+/**
  * Discriminated union returned by `parseEmbedReturnHash`. The
  * `kind` field distinguishes the two signals the cloud editor
  * forwards via `newTab` mode.

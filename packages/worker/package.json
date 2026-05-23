@@ -23,9 +23,15 @@
     "secrets:put:github-client-secret": "wrangler secret put GITHUB_OAUTH_CLIENT_SECRET",
     "secrets:put:google-client-id": "wrangler secret put GOOGLE_OAUTH_CLIENT_ID",
     "secrets:put:google-client-secret": "wrangler secret put GOOGLE_OAUTH_CLIENT_SECRET",
+    "secrets:put:github-app-id": "wrangler secret put GITHUB_APP_ID",
+    "secrets:put:github-app-client-id": "wrangler secret put GITHUB_APP_CLIENT_ID",
+    "secrets:put:github-app-client-secret": "wrangler secret put GITHUB_APP_CLIENT_SECRET",
+    "secrets:put:github-app-private-key": "wrangler secret put GITHUB_APP_PRIVATE_KEY",
+    "secrets:put:github-app-webhook-secret": "wrangler secret put GITHUB_APP_WEBHOOK_SECRET",
     "tail": "wrangler tail"
   },
   "dependencies": {
+    "@ingcreators/annot-embed-protocol": "workspace:*",
     "hono": "^4.12.21"
   },
   "devDependencies": {
