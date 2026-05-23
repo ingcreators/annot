@@ -46,11 +46,38 @@ const MOSAIC_BLOCK_PX = 16;
 const BLUR_RADIUS_PX = 12;
 
 /**
- * Burn redactions into a PNG buffer. Returns a new PNG with the
- * regions painted over the source pixels.
+ * Burn regions into a PNG buffer. Returns a new PNG with each
+ * region painted over the source pixels per its `style`
+ * (`solid` / `mosaic` / `blur`). The function itself is
+ * intent-neutral: redaction is one use case, but the same
+ * primitive serves any "destructively modify these regions on
+ * the bitmap" task. See
+ * [`burnRegions`](./redact-burn.ts) for the
+ * operation-aligned alias added in Phase 3k.
  *
  * Regions are processed in order; later regions overlay earlier
  * ones (no automatic deduplication or alpha-blending).
+ *
+ * **Other use cases beyond redaction** (intentional list — the
+ * function isn't redact-specific):
+ *
+ * - Editor-side "highlight this region with a translucent
+ *   colour and ship it baked" workflow.
+ * - Visual-regression pre-processing — burn dynamic content
+ *   (timestamps, login state badges) into the screenshot so
+ *   pixel diffs stay deterministic.
+ * - Watermark / overlay burn for downstream distribution.
+ * - Privacy hardening at non-redact regions (e.g. blur a logo
+ *   in a publicly-shared screenshot).
+ *
+ * **Note on naming**: this function is historically called
+ * `burnRedactions` because the MCP `annot_redact_screenshot`
+ * tool was its first caller. Since Phase 3k of
+ * `docs/plans/living-spec-authoring-roadmap.md`
+ * (Phase 3 follow-up #2), the operation-aligned alias
+ * `burnRegions` is preferred for new code. Both names point
+ * at the identical function — picking one or the other is
+ * purely a docs-readability choice.
  */
 export async function burnRedactions(
   pngBytes: Uint8Array,
@@ -127,3 +154,22 @@ function paintBlur(
   ctx.drawImage(source, 0, 0);
   ctx.restore();
 }
+
+/**
+ * Operation-aligned alias for {@link burnRedactions}. Phase 3k of
+ * `docs/plans/living-spec-authoring-roadmap.md`
+ * (Phase 3 follow-up #2).
+ *
+ * The function `burnRedactions` is named for its first caller's
+ * intent (MCP's `annot_redact_screenshot`), but the underlying
+ * primitive is a `pngBytes + region[] → pngBytes` raster
+ * transform — generic over the caller's purpose (redaction,
+ * highlight burn-in, deterministic timestamp wipe-out, watermark
+ * overlay, …). New code should prefer the operation-aligned
+ * name `burnRegions`; existing `burnRedactions` callers keep
+ * working unchanged.
+ *
+ * Identity-equal to {@link burnRedactions} — picking one name
+ * over the other is purely a docs-readability choice.
+ */
+export const burnRegions: typeof burnRedactions = burnRedactions;

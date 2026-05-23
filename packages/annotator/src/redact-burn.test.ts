@@ -10,7 +10,7 @@
 import { createCanvas } from "@napi-rs/canvas";
 import { describe, expect, test } from "vitest";
 
-import { burnRedactions } from "./redact-burn.js";
+import { burnRedactions, burnRegions } from "./redact-burn.js";
 
 /**
  * Minimal IHDR-chunk reader. The first 8 bytes are the PNG magic;
@@ -92,5 +92,25 @@ describe("burnRedactions", () => {
     // Sanity-check: the output bytes differ from a no-op burn.
     const noop = await burnRedactions(png, []);
     expect(out).not.toEqual(noop);
+  });
+});
+
+// ─── Phase 3k — burnRegions alias ──────────────────────────────
+
+describe("burnRegions (alias for burnRedactions)", () => {
+  test("is identity-equal to burnRedactions", () => {
+    // Picking one name over the other is purely a docs choice;
+    // the export is the same function reference.
+    expect(burnRegions).toBe(burnRedactions);
+  });
+
+  test("produces byte-identical output to burnRedactions for the same input", async () => {
+    const png = whiteCanvasPng(40, 40);
+    const regions: Parameters<typeof burnRegions>[1] = [
+      { bbox: { x: 5, y: 5, width: 20, height: 10 }, style: "mosaic" },
+    ];
+    const viaRedactions = await burnRedactions(png, regions);
+    const viaRegions = await burnRegions(png, regions);
+    expect(Array.from(viaRegions)).toEqual(Array.from(viaRedactions));
   });
 });

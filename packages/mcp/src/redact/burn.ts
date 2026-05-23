@@ -14,4 +14,4 @@
 // delete this file; deliberately left in place for now to keep
 // the relocation a no-behaviour-change refactor.
 
-export { burnRedactions, type RedactRegion } from "@ingcreators/annot-annotator";
+export { burnRedactions, burnRegions, type RedactRegion } from "@ingcreators/annot-annotator";
