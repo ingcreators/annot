@@ -24,3 +24,11 @@ export {
   EMBED_PROTOCOL_VERSION,
   isEmbedEvent,
 } from "./events.js";
+export type { EmbedRequestParams, EmbedReturnSignal } from "./url-callback.js";
+export {
+  EmbedRequestUrlError,
+  encodeEmbedRequestUrl,
+  encodeEmbedReturnHash,
+  MAX_EMBED_REQUEST_URL_BYTES,
+  parseEmbedReturnHash,
+} from "./url-callback.js";

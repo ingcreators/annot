@@ -10,7 +10,7 @@ Sub-phase 5a ships event types + protocol version constant;
 sub-phase 5b layers the URL-callback codec; sub-phase 5c
 layers the postMessage dispatcher.
 
-## What's here today (5a)
+## What's here today (5a + 5b)
 
 - `EmbedMode` — `"newTab" | "inline" | "disabled"`
 - `EmbedEvent` — discriminated union of every event that flows
@@ -21,11 +21,16 @@ layers the postMessage dispatcher.
   (kept in sync with the union via a `satisfies` clause)
 - `isEmbedEvent(value)` — type-guarded narrowing helper for
   the postMessage boundary
+- `encodeEmbedRequestUrl(params)` — builds the cloud-editor URL
+  for `<AnnotEditButton>`'s `newTab` mode (5b)
+- `parseEmbedReturnHash(hash)` — decodes the return-URL hash
+  fragment back into a typed `EmbedReturnSignal` (5b)
+- `encodeEmbedReturnHash(signal)` — inverse of `parseEmbedReturnHash`;
+  the annot-cloud `/embed` route uses this to build the
+  redirect target (5b)
 
 ## What's coming next
 
-- 5b — `encodeEmbedRequestUrl` + `parseEmbedReturnHash` for
-  `newTab` mode's URL-callback transport
 - 5c — `createEmbedHostMessenger` + `createEmbedClientMessenger`
   for `inline` mode's postMessage transport
 
