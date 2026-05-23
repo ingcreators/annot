@@ -21,8 +21,9 @@
 //     deployment) can register the App in one click and then run
 //     the `wrangler secret put` commands listed at the bottom.
 //
-// 5y-2 will add `/api/embed/load` + `/api/embed/commit` +
-// `/api/embed/webhook` + `/api/embed/setup/callback`.
+// 5y-2 added `/api/embed/load`; 5y-4 added `/api/embed/commit`.
+// `/api/embed/webhook` + `/api/embed/setup/callback` land in 5y-6
+// (`webhook.ts` + `setup-callback.ts`).
 
 import type { Context } from "hono";
 import type { Env } from "../index.js";

@@ -26,6 +26,8 @@
 //   - /api/embed/load                        (5y-2 — reads PNG + annotations yaml via App installation token)
 //   - /api/embed/commit                      (5y-4 — commits edited yaml + optional PNG via PR-mode or direct-push)
 //   - /api/embed/installations/:id           (5z-1 — PATCH build_hook_url / repo_policy / default_branch_override)
+//   - /api/embed/webhook                     (5y-6 — GitHub App webhook receiver)
+//   - /api/embed/setup/callback              (5y-6 — manifest-flow redirect target)
 //   - /embed                                 (5y-3 — static HTML mounting <annot-embed-shell>)
 //   - per-workspace plan-gated quotas on POST /api/images, POST
 //     /api/documents, PATCH /api/documents/:id/content, POST
@@ -38,9 +40,7 @@
 //   - GITHUB_OAUTH_CLIENT_ID / _SECRET secrets
 //   - GOOGLE_OAUTH_CLIENT_ID / _SECRET secrets
 //   - GITHUB_APP_* secrets (5y-1; consumed by 5y-2+)
-//   Phase 6 follow-up 5y-2+:
-//             /api/embed/load + /api/embed/commit + /api/embed/webhook
-//             + /api/embed/setup/callback
+//   Phase 6 follow-up complete (5y-1 through 5z-2).
 //   Phase 7:  /api/billing/* + /api/webhooks/stripe (private repo
 //             integration)
 //
@@ -65,6 +65,8 @@ import { handleEmbedCommit } from "./embed/commit.js";
 import { handleEmbedLoad } from "./embed/load.js";
 import { handleEmbedPage } from "./embed/page.js";
 import { handleEmbedHealth, handleEmbedSetupPage } from "./embed/routes.js";
+import { handleEmbedSetupCallback } from "./embed/setup-callback.js";
+import { handleEmbedWebhook } from "./embed/webhook.js";
 import {
   handleImageAnnotationsGet,
   handleImageAnnotationsPatch,
@@ -332,6 +334,14 @@ app.get("/api/shares/:token/payload", handleSharePayload);
 // + /commit + /webhook + /setup/callback endpoints land in 5y-2+.
 app.get("/api/embed/health", handleEmbedHealth);
 app.get("/api/embed/setup", handleEmbedSetupPage);
+// 5y-6 manifest-flow callback — GitHub redirects here after the
+// operator confirms App registration. Surfaces the new App's
+// credentials (one-time view) so they can be pasted into
+// `wrangler secret put`.
+app.get("/api/embed/setup/callback", (c) => handleEmbedSetupCallback(c));
+// 5y-6 GitHub App webhook receiver — keeps `github_installations`
+// in sync with install / uninstall / suspend / unsuspend events.
+app.post("/api/embed/webhook", handleEmbedWebhook);
 app.get("/api/embed/load", handleEmbedLoad);
 app.post("/api/embed/commit", handleEmbedCommit);
 // 5z-1 dashboard knob — update build_hook_url / repo_policy /
