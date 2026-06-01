@@ -36,11 +36,11 @@
     "hono": "^4.12.22"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260524.1",
+    "@cloudflare/workers-types": "^4.20260531.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.9.1",
     "better-sqlite3": "^12.4.1",
     "typescript": "catalog:",
-    "wrangler": "^4.94.0"
+    "wrangler": "^4.95.0"
   }
 }
