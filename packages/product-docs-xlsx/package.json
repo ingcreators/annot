@@ -58,7 +58,7 @@
   "devDependencies": {
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vite-plugin-dts": "^5.0.1"
+    "vite-plugin-dts": "^5.0.2"
   },
   "dependencies": {
     "@ingcreators/annot-product-docs": "workspace:*",

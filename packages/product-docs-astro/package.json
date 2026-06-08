@@ -84,7 +84,7 @@
     "astro": "^6.3.7",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vite-plugin-dts": "^5.0.1"
+    "vite-plugin-dts": "^5.0.2"
   },
   "dependencies": {
     "@ingcreators/annot-annotator": "workspace:*",
