@@ -82,7 +82,7 @@
     "@types/pako": "^2.0.4",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vite-plugin-dts": "^5.0.1"
+    "vite-plugin-dts": "^5.0.2"
   },
   "dependencies": {
     "js-yaml": "^4.1.1",
