@@ -33,7 +33,7 @@
   },
   "dependencies": {
     "@ingcreators/annot-embed-protocol": "workspace:*",
-    "hono": "^4.12.22"
+    "hono": "^4.12.26"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260524.1",
