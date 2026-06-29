@@ -79,7 +79,7 @@
     "remark-mdx": "^3.1.1",
     "remark-parse": "^11.0.0",
     "remark-stringify": "^11.0.0",
-    "playwright-core": "^1.50.0",
+    "playwright-core": "^1.61.1",
     "unified": "^11.0.5",
     "unist-util-visit": "^5.0.0",
     "zod": "^3.25.0"
