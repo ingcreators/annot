@@ -189,7 +189,15 @@ describe("/api/embed/commit", () => {
       accountLogin: "octocat",
       accountType: "User",
       repoPolicy: "direct-push",
+      workspaceId,
     });
+    // A matching allowlist must not block the commit — exercises
+    // the `rules !== null` positive path (the NULL-allowlist
+    // positive path is covered by the pr-mode test below).
+    await db
+      .prepare("UPDATE github_installations SET target_paths_json = ? WHERE id = 999")
+      .bind(JSON.stringify([{ repo: "octocat/myrepo", pathPrefix: "" }]))
+      .run();
     const env = makeMockEnv({ DB: db, SESSIONS: kv });
     env.GITHUB_APP_PRIVATE_KEY = await seedRSAKey();
     env.GITHUB_APP_ID = "12345";
@@ -258,6 +266,7 @@ describe("/api/embed/commit", () => {
       accountType: "User",
       // pr-mode is the default; explicit for clarity.
       repoPolicy: "pr-mode",
+      workspaceId,
     });
     const env = makeMockEnv({ DB: db, SESSIONS: kv });
     env.GITHUB_APP_PRIVATE_KEY = await seedRSAKey();
@@ -321,6 +330,7 @@ describe("/api/embed/commit", () => {
       accountLogin: "octocat",
       accountType: "User",
       repoPolicy: "direct-push",
+      workspaceId,
     });
     const env = makeMockEnv({ DB: db, SESSIONS: kv });
     env.GITHUB_APP_PRIVATE_KEY = await seedRSAKey();
@@ -357,5 +367,128 @@ describe("/api/embed/commit", () => {
     const body = (await res.json()) as { ok: boolean; error: string };
     expect(body.ok).toBe(false);
     expect(body.error).toBe("conflict");
+  });
+
+  // ─── Authorisation gates (no fetch mocks needed — every check
+  //     below fires before any installation token is minted) ────
+
+  function commitBody(overrides: Record<string, unknown> = {}): string {
+    return JSON.stringify({
+      installationId: 999,
+      repo: "octocat/myrepo",
+      pngPath: "a.png",
+      annotationsPath: "a.yaml",
+      branch: "main",
+      annotationsYaml: "v: 1",
+      annotationsSha: "x",
+      editId: "e1",
+      ...overrides,
+    });
+  }
+
+  it("403s when the installation is unclaimed", async () => {
+    const { db, userId, workspaceId } = await seedDb();
+    const kv = makeMockKv();
+    const cookie = await seedSession({ kv, userId, workspaceId });
+    // No workspaceId → workspace_id stays NULL (unclaimed).
+    await upsertGitHubInstallation(db, {
+      id: 999,
+      accountLogin: "octocat",
+      accountType: "User",
+    });
+    const env = makeMockEnv({ DB: db, SESSIONS: kv });
+    const res = await app.request(
+      "https://annot.work/api/embed/commit",
+      {
+        method: "POST",
+        headers: { Cookie: cookie, "Content-Type": "application/json" },
+        body: commitBody(),
+      },
+      env,
+    );
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: string; message: string };
+    expect(body.error).toBe("not_authorised");
+    expect(body.message).toContain("not claimed");
+  });
+
+  it("403s when the installation is claimed by another workspace", async () => {
+    const { db, userId, workspaceId } = await seedDb();
+    const kv = makeMockKv();
+    const cookie = await seedSession({ kv, userId, workspaceId });
+    await upsertGitHubInstallation(db, {
+      id: 999,
+      accountLogin: "octocat",
+      accountType: "User",
+      workspaceId: "ws-other",
+    });
+    const env = makeMockEnv({ DB: db, SESSIONS: kv });
+    const res = await app.request(
+      "https://annot.work/api/embed/commit",
+      {
+        method: "POST",
+        headers: { Cookie: cookie, "Content-Type": "application/json" },
+        body: commitBody(),
+      },
+      env,
+    );
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("not_authorised");
+  });
+
+  it("403s when the repo does not belong to the installation's account", async () => {
+    const { db, userId, workspaceId } = await seedDb();
+    const kv = makeMockKv();
+    const cookie = await seedSession({ kv, userId, workspaceId });
+    await upsertGitHubInstallation(db, {
+      id: 999,
+      accountLogin: "octocat",
+      accountType: "User",
+      workspaceId,
+    });
+    const env = makeMockEnv({ DB: db, SESSIONS: kv });
+    const res = await app.request(
+      "https://annot.work/api/embed/commit",
+      {
+        method: "POST",
+        headers: { Cookie: cookie, "Content-Type": "application/json" },
+        body: commitBody({ repo: "someone-else/other-repo" }),
+      },
+      env,
+    );
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: string; message: string };
+    expect(body.error).toBe("not_authorised");
+    expect(body.message).toContain("covers repos under");
+  });
+
+  it("403s when a target path is outside the target_paths_json allowlist", async () => {
+    const { db, userId, workspaceId } = await seedDb();
+    const kv = makeMockKv();
+    const cookie = await seedSession({ kv, userId, workspaceId });
+    await upsertGitHubInstallation(db, {
+      id: 999,
+      accountLogin: "octocat",
+      accountType: "User",
+      workspaceId,
+    });
+    await db
+      .prepare("UPDATE github_installations SET target_paths_json = ? WHERE id = 999")
+      .bind(JSON.stringify([{ repo: "octocat/myrepo", pathPrefix: "docs/allowed/" }]))
+      .run();
+    const env = makeMockEnv({ DB: db, SESSIONS: kv });
+    const res = await app.request(
+      "https://annot.work/api/embed/commit",
+      {
+        method: "POST",
+        headers: { Cookie: cookie, "Content-Type": "application/json" },
+        body: commitBody(),
+      },
+      env,
+    );
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("path_not_allowed");
   });
 });

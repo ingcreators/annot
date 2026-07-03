@@ -241,11 +241,20 @@ describe("/api/embed/load", () => {
       id: 999,
       accountLogin: "octocat",
       accountType: "User",
+      workspaceId: "ws-1",
     });
     const sess = await seedSession({ kv, userId: "user-1", workspaceId: "ws-1" });
     const env = buildEnv(db, kv);
     env.GITHUB_APP_PRIVATE_KEY = pem;
     env.GITHUB_APP_ID = "12345";
+
+    // A matching allowlist must not block the load — exercises the
+    // `rules !== null` positive path (the NULL-allowlist positive
+    // path is covered by the private-repo plan-gate test below).
+    await db
+      .prepare("UPDATE github_installations SET target_paths_json = ? WHERE id = 999")
+      .bind(JSON.stringify([{ repo: "octocat/myrepo", pathPrefix: "docs/" }]))
+      .run();
 
     const pngBytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
     const pngBase64 = base64UrlEncode(pngBytes).replaceAll("-", "+").replaceAll("_", "/");
@@ -330,6 +339,7 @@ describe("/api/embed/load", () => {
       id: 999,
       accountLogin: "octocat",
       accountType: "User",
+      workspaceId: "ws-1",
     });
     const sess = await seedSession({ kv, userId: "user-1", workspaceId: "ws-1" });
     const env = buildEnv(db, kv);
@@ -356,6 +366,100 @@ describe("/api/embed/load", () => {
     const body = (await res.json()) as { error: string; requiredPlan: string };
     expect(body.error).toBe("plan_required");
     expect(body.requiredPlan).toBe("pro");
+  });
+
+  it("403s when the installation is unclaimed (no workspace has claimed it)", async () => {
+    const kv = makeMockKv();
+    const db = makeMockD1Sqlite();
+    await db
+      .prepare(
+        "INSERT INTO users (id, plan, created_at, updated_at, last_seen_at) VALUES (?, 'pro', 0, 0, 0)",
+      )
+      .bind("user-1")
+      .run();
+    await db
+      .prepare(
+        "INSERT INTO workspaces (id, name, owner_user_id, created_at) VALUES (?, 'My Workspace', ?, 0)",
+      )
+      .bind("ws-1", "user-1")
+      .run();
+    // No workspaceId → workspace_id stays NULL (unclaimed).
+    await upsertGitHubInstallation(db, {
+      id: 999,
+      accountLogin: "octocat",
+      accountType: "User",
+    });
+    const sess = await seedSession({ kv, userId: "user-1", workspaceId: "ws-1" });
+    const env = buildEnv(db, kv);
+    // No GitHub fetch mocks: the check fires before any token mint.
+    const res = await app.request(buildLoadUrl(), { headers: { Cookie: sess.cookie } }, env);
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: string; message: string };
+    expect(body.error).toBe("not_authorised");
+    expect(body.message).toContain("not claimed");
+  });
+
+  it("403s when the installation is claimed by another workspace", async () => {
+    const kv = makeMockKv();
+    const db = makeMockD1Sqlite();
+    await db
+      .prepare(
+        "INSERT INTO users (id, plan, created_at, updated_at, last_seen_at) VALUES (?, 'pro', 0, 0, 0)",
+      )
+      .bind("user-1")
+      .run();
+    await db
+      .prepare(
+        "INSERT INTO workspaces (id, name, owner_user_id, created_at) VALUES (?, 'My Workspace', ?, 0)",
+      )
+      .bind("ws-1", "user-1")
+      .run();
+    await upsertGitHubInstallation(db, {
+      id: 999,
+      accountLogin: "octocat",
+      accountType: "User",
+      workspaceId: "ws-other",
+    });
+    const sess = await seedSession({ kv, userId: "user-1", workspaceId: "ws-1" });
+    const env = buildEnv(db, kv);
+    const res = await app.request(buildLoadUrl(), { headers: { Cookie: sess.cookie } }, env);
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("not_authorised");
+  });
+
+  it("403s when a requested path is outside the target_paths_json allowlist", async () => {
+    const kv = makeMockKv();
+    const db = makeMockD1Sqlite();
+    await db
+      .prepare(
+        "INSERT INTO users (id, plan, created_at, updated_at, last_seen_at) VALUES (?, 'pro', 0, 0, 0)",
+      )
+      .bind("user-1")
+      .run();
+    await db
+      .prepare(
+        "INSERT INTO workspaces (id, name, owner_user_id, created_at) VALUES (?, 'My Workspace', ?, 0)",
+      )
+      .bind("ws-1", "user-1")
+      .run();
+    await upsertGitHubInstallation(db, {
+      id: 999,
+      accountLogin: "octocat",
+      accountType: "User",
+      workspaceId: "ws-1",
+    });
+    await db
+      .prepare("UPDATE github_installations SET target_paths_json = ? WHERE id = 999")
+      .bind(JSON.stringify([{ repo: "octocat/myrepo", pathPrefix: "docs/allowed/" }]))
+      .run();
+    const sess = await seedSession({ kv, userId: "user-1", workspaceId: "ws-1" });
+    const env = buildEnv(db, kv);
+    // Default paths live under docs/, not docs/allowed/.
+    const res = await app.request(buildLoadUrl(), { headers: { Cookie: sess.cookie } }, env);
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("path_not_allowed");
   });
 
   it("404s when no installation is found for the repo owner", async () => {

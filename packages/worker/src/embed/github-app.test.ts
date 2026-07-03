@@ -5,9 +5,13 @@ import { describe, expect, it } from "vitest";
 import app from "../index.js";
 import { makeMockD1Sqlite, makeMockEnv } from "../test-helpers.js";
 import {
+  checkInstallationWorkspaceAccess,
   findGitHubInstallationByAccount,
   findGitHubInstallationById,
+  type GitHubInstallationRow,
   inspectGitHubAppSecrets,
+  isTargetPathAllowed,
+  parseTargetPaths,
   upsertGitHubInstallation,
 } from "./github-app.js";
 
@@ -117,6 +121,72 @@ describe("github_installations CRUD", () => {
       .run();
     expect(await findGitHubInstallationById(db, 444)).toBeNull();
     expect(await findGitHubInstallationByAccount(db, "sleeping")).toBeNull();
+  });
+});
+
+describe("checkInstallationWorkspaceAccess", () => {
+  function row(workspaceId: string | null): GitHubInstallationRow {
+    return {
+      id: 1,
+      account_login: "octocat",
+      account_type: "User",
+      workspace_id: workspaceId,
+      installed_at: 0,
+      suspended_at: null,
+      repo_policy: "pr-mode",
+      default_branch_override: null,
+      build_hook_url: null,
+      target_paths_json: null,
+    };
+  }
+
+  it("grants access to the claiming workspace", () => {
+    expect(checkInstallationWorkspaceAccess(row("ws-1"), "ws-1")).toBeNull();
+  });
+
+  it("denies unclaimed installations", () => {
+    expect(checkInstallationWorkspaceAccess(row(null), "ws-1")).toBe("unclaimed");
+  });
+
+  it("denies other workspaces", () => {
+    expect(checkInstallationWorkspaceAccess(row("ws-2"), "ws-1")).toBe("other_workspace");
+  });
+});
+
+describe("parseTargetPaths / isTargetPathAllowed", () => {
+  it("NULL column means no allowlist (everything allowed)", () => {
+    const rules = parseTargetPaths(null);
+    expect(rules).toBeNull();
+    expect(isTargetPathAllowed(rules, "octocat/myrepo", "any/path.png")).toBe(true);
+  });
+
+  it("matches repo case-insensitively and paths by prefix", () => {
+    const rules = parseTargetPaths(
+      JSON.stringify([{ repo: "Octocat/MyRepo", pathPrefix: "docs/" }]),
+    );
+    expect(isTargetPathAllowed(rules, "octocat/myrepo", "docs/login.png")).toBe(true);
+    expect(isTargetPathAllowed(rules, "octocat/myrepo", "src/login.png")).toBe(false);
+    expect(isTargetPathAllowed(rules, "octocat/other", "docs/login.png")).toBe(false);
+  });
+
+  it("an empty pathPrefix allows the whole repo", () => {
+    const rules = parseTargetPaths(JSON.stringify([{ repo: "octocat/myrepo", pathPrefix: "" }]));
+    expect(isTargetPathAllowed(rules, "octocat/myrepo", "anywhere/at/all.yaml")).toBe(true);
+    expect(isTargetPathAllowed(rules, "octocat/other", "anywhere/at/all.yaml")).toBe(false);
+  });
+
+  it("fails CLOSED on malformed JSON", () => {
+    const rules = parseTargetPaths("{not json");
+    expect(rules).toEqual([]);
+    expect(isTargetPathAllowed(rules, "octocat/myrepo", "docs/login.png")).toBe(false);
+  });
+
+  it("fails CLOSED on a non-array value and drops malformed entries", () => {
+    expect(parseTargetPaths(JSON.stringify({ repo: "octocat/myrepo" }))).toEqual([]);
+    const rules = parseTargetPaths(
+      JSON.stringify([{ repo: "octocat/myrepo", pathPrefix: "docs/" }, { repo: 42 }, "nope", null]),
+    );
+    expect(rules).toEqual([{ repo: "octocat/myrepo", pathPrefix: "docs/" }]);
   });
 });
 
