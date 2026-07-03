@@ -2,8 +2,12 @@
 # The verify-addon CI gate diffs a fresh build byte-for-byte against
 # prebuilds/win-clipboard.win32-x64.node, so an unpinned `stable`
 # channel breaks the gate every time upstream ships a new compiler.
-# When bumping this pin, rebuild + re-commit the prebuild in the same
-# PR (`bash scripts/verify-addon.sh` must pass locally).
+# When bumping this pin, re-commit the prebuild in the same PR. The
+# canonical build environment is the windows-latest CI runner (the
+# MSVC linker version also feeds the bytes): push the pin bump, let
+# the verify job fail once, then download the
+# `win-clipboard-fresh-prebuild` artifact from that run and commit it
+# as prebuilds/win-clipboard.win32-x64.node.
 [toolchain]
 channel = "1.94.1"
 targets = ["x86_64-pc-windows-msvc"]
