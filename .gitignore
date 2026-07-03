@@ -1,4 +1,7 @@
 node_modules/
+# In-repo pnpm content-addressable store (created when the store dir
+# resolves inside the workspace, e.g. some WSL / devcontainer setups).
+.pnpm-store/
 dist/
 dist-electron/
 storybook-static/
