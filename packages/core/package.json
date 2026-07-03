@@ -1,6 +1,6 @@
 {
   "name": "@ingcreators/annot-core",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Annot SDK — SVG-first screenshot annotation format, storage abstractions, and editor primitives. The foundation shared by the PWA, Chrome extension, Electron desktop, VSCode extension, and the headless annotator.",
   "license": "Apache-2.0",
   "author": "ingcreators",
@@ -68,6 +68,10 @@
       "./xmp-bytes": {
         "types": "./dist/xmp/xmp-bytes.d.ts",
         "default": "./dist/xmp-bytes.js"
+      },
+      "./element-tree": {
+        "types": "./dist/element-tree/index.d.ts",
+        "default": "./dist/element-tree.js"
       },
       "./styles/*": "./styles/*"
     }

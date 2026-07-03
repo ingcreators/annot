@@ -1,5 +1,12 @@
 # @ingcreators/annot-mcp
 
+## 0.3.3
+
+### Patch Changes
+
+- @ingcreators/annot-annotator@0.6.0
+- @ingcreators/annot-product-docs@0.4.1
+
 ## 0.3.2
 
 ### Patch Changes
