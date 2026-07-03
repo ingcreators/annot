@@ -126,7 +126,7 @@ jobs:
           steps.diff.outputs.changed == 'true'
           && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         id: app-token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.DOCS_TOUR_APP_ID }}
           private-key: ${{ secrets.DOCS_TOUR_APP_PRIVATE_KEY }}
