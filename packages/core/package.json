@@ -69,6 +69,10 @@
         "types": "./dist/xmp/xmp-bytes.d.ts",
         "default": "./dist/xmp-bytes.js"
       },
+      "./element-tree": {
+        "types": "./dist/element-tree/index.d.ts",
+        "default": "./dist/element-tree.js"
+      },
       "./styles/*": "./styles/*"
     }
   },
