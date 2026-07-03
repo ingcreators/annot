@@ -79,7 +79,7 @@ jobs:
     timeout-minutes: 15
     continue-on-error: true # advisory in Phase 5
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
