@@ -106,9 +106,9 @@
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^25",
-    "chrome-types": "^0.1.429",
-    "electron": "^42.2.0",
-    "electron-builder": "^26.8.1",
+    "chrome-types": "^0.1.431",
+    "electron": "^42.5.0",
+    "electron-builder": "^26.15.3",
     "electron-vite": "6.0.0-beta.1",
     "typescript": "catalog:",
     "vite": "catalog:"
