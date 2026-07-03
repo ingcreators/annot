@@ -135,10 +135,12 @@ function extractFrontmatter(
 }
 
 function formatZodError(error: {
-  issues: Array<{ path: Array<string | number>; message: string }>;
+  // zod 4 widened issue paths to PropertyKey (symbol keys possible);
+  // stringify explicitly since Array#join throws on symbols.
+  issues: ReadonlyArray<{ path: ReadonlyArray<PropertyKey>; message: string }>;
 }): string {
   return error.issues
-    .map((i) => `  - ${i.path.length ? i.path.join(".") + ": " : ""}${i.message}`)
+    .map((i) => `  - ${i.path.length ? i.path.map(String).join(".") + ": " : ""}${i.message}`)
     .join("\n");
 }
 
