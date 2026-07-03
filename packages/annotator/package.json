@@ -1,6 +1,6 @@
 {
   "name": "@ingcreators/annot-annotator",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Headless annotator — render annotated screenshots from Node without a browser. Built on @resvg/resvg-js. Pairs with @ingcreators/annot-playwright for fail-on-test annotated reports.",
   "license": "Apache-2.0",
   "author": "ingcreators",
@@ -60,10 +60,10 @@
     "@ingcreators/annot-core": "workspace:*",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vite-plugin-dts": "^5.0.1"
+    "vite-plugin-dts": "^5.0.3"
   },
   "dependencies": {
-    "@napi-rs/canvas": "^1.0.0",
+    "@napi-rs/canvas": "^1.0.2",
     "@resvg/resvg-js": "^2.6.2",
     "@xmldom/xmldom": "^0.9.10",
     "pako": "^2.1.0",

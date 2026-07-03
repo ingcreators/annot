@@ -44,7 +44,7 @@ jobs:
       run:
         working-directory: examples/workflow-app
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -81,3 +81,18 @@ jobs:
           else
             echo "::notice::Docs tour completed; no rewrites (example MDX + base PNGs match the live SPA)."
           fi
+
+      # Baseline PNGs must be ubuntu-rendered to stay byte-stable
+      # in this workflow — regenerating them on a dev machine
+      # (different OS font rasterisation) would re-drift on the
+      # next CI run. Refresh flow: workflow_dispatch this on a
+      # branch, download the artifact, commit its contents.
+      - name: Upload regenerated baselines
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: regenerated-baselines
+          path: |
+            examples/workflow-app/docs/books/
+            examples/workflow-app/docs-site/public/shots/
+          if-no-files-found: error

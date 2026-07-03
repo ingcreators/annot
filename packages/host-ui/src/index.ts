@@ -42,9 +42,11 @@ export {
   type ShortcutGroup,
 } from "./keyboard-help.js";
 export type { UISection, UISectionContext, UISectionLifecycle } from "./ui-section.js";
+
 import "./annot-icon.js";
 
 export type { AnnotTagEditorElement } from "./annot-tag-editor.js";
+
 import "./annot-tag-editor.js";
 
 export {
@@ -55,10 +57,12 @@ export {
   type LastCommitInfo,
   validateFilename,
 } from "./annot-file-details-drawer.js";
+
 import "./annot-file-details-drawer.js";
 
 export type { AnnotScratchpadSectionElement } from "./annot-scratchpad-section.js";
 export type { ScratchpadItem, ScratchpadStoreLike } from "./scratchpad-types.js";
+
 import "./annot-scratchpad-section.js";
 
 export {
@@ -72,10 +76,12 @@ export {
   type SerializedSelection,
   serializeSelection,
 } from "./scratchpad-utils.js";
+
 import "./editor-statusbar.js";
 
 export type {
   AnnotApplyRedactionsButtonElement,
   ApplyRedactionsAppliedDetail,
 } from "./annot-apply-redactions-button.js";
+
 import "./annot-apply-redactions-button.js";

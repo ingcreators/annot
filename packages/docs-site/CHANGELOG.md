@@ -1,5 +1,24 @@
 # @ingcreators/annot-docs-site
 
+## 0.0.6
+
+### Patch Changes
+
+- Updated dependencies [0179c4c]
+  - @ingcreators/annot-product-docs-astro@0.4.0
+  - @ingcreators/annot-product-docs@0.4.1
+
+## 0.0.5
+
+### Patch Changes
+
+- Updated dependencies [b5d52f6]
+- Updated dependencies [fa712fd]
+- Updated dependencies [f09a6b1]
+- Updated dependencies [0d19345]
+  - @ingcreators/annot-product-docs@0.4.0
+  - @ingcreators/annot-product-docs-astro@0.3.1
+
 ## 0.0.4
 
 ### Patch Changes

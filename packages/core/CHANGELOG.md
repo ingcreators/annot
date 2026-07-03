@@ -1,5 +1,116 @@
 # @ingcreators/annot-core
 
+## 0.3.1
+
+### Patch Changes
+
+- b47d896: **Publish the `./element-tree` subpath** — the published tarball now
+  serves `@ingcreators/annot-core/element-tree` (Tier A screen-capture
+  model + YAML / JSON serializers + walk/find utilities).
+
+  ### Root cause
+
+  `@ingcreators/annot-playwright`'s built `dist/index.js` externalises
+  its `@ingcreators/annot-core/element-tree` import, but core's
+  `publishConfig.exports` only mapped `.`, `./xmp-bytes`, and
+  `./styles/*` — the subpath resolved in the workspace (dev `exports`
+  map to `src/`) and failed for every registry consumer:
+
+  ```
+  Error: Package subpath './element-tree' is not defined by "exports"
+  in .../node_modules/@ingcreators/annot-core/package.json imported
+  from .../@ingcreators/annot-playwright/dist/index.js
+  ```
+
+  First observed in the workflow-app docs tour after the 0.4.1
+  publish repaired the `writeFile` dist crash — `playwright test`
+  now dies at config load before any test runs.
+
+  ### Fix
+  - `vite.config.ts` gains an `element-tree` library entry
+    (`src/element-tree/index.ts` → `dist/element-tree.js`).
+  - `publishConfig.exports` maps `./element-tree` to the built JS +
+    the emitted `dist/element-tree/index.d.ts`.
+
+  ### Verification
+  - `pnpm --filter @ingcreators/annot-core build` emits
+    `dist/element-tree.js` + `dist/element-tree/index.d.ts`.
+  - Packed tarball installed into a scratch project resolves
+    `import("@ingcreators/annot-core/element-tree")` and exposes the
+    full serializer / walk surface.
+
+## 0.3.0
+
+### Minor Changes
+
+- 691bec5: **Add `flattenEditablePng(pngBytes) → pngBytes`** — Phase 3j of
+  `docs/plans/living-spec-authoring-roadmap.md` (Phase 3
+  follow-up #2). The editor's editable-PNG format embeds the
+  original un-annotated capture + the annotations SVG in PNG
+  ancillary chunks for re-edit; "flatten" drops those chunks and
+  keeps just the visible (already-annotated) bytes.
+
+  ### `@ingcreators/annot-annotator` — new public surface
+
+  ```ts
+  import { flattenEditablePng } from "@ingcreators/annot-annotator";
+
+  const flat = flattenEditablePng(editablePngBytes);
+  // → flat PNG: same visible pixels, no Adobe XMP iTXt chunk,
+  //   no custom svGo chunk. `readEditablePngBytes(flat)` returns
+  //   null. File size drops significantly (the editable layer
+  //   roughly doubled the bytes).
+  ```
+
+  ### `@ingcreators/annot-core/xmp-bytes` — new public surface
+
+  The implementation lives in `@ingcreators/annot-core` as
+  `stripPngEditableLayer` — the same chunk-walking helper that
+  `writePngWithMetadata` / `writePngWithTagsOnly` already used
+  internally to clean stale metadata before re-injecting. Now
+  exported so other Tier A consumers (not just annotator) can
+  use it directly.
+
+  annotator's `flattenEditablePng` is a one-line wrapper that
+  calls `stripPngEditableLayer` under a more user-facing name.
+
+  ### Why this is metadata removal, not re-rasterization
+
+  `toEditablePng` rasterizes the SVG fragment onto the base image
+  FIRST and embeds the editable layer as ancillary PNG chunks
+  (`iTXt` carrying Adobe XMP + custom `svGo` chunk). The visible
+  bytes are already the annotated bitmap. Flattening strips the
+  ancillary chunks; the IDAT pixel data stays byte-identical.
+  No decode, no re-encode, no `@napi-rs/canvas` round-trip.
+
+  ### Use cases
+  - **Publish-flat** — editor session → distribution-ready PNG;
+    the editable layer is dead weight for downstream consumers
+    (Slack drop, third-party viewers).
+  - **File size** — editable PNG roughly doubles in bytes
+    (original + SVG embedded); flattening drops the overhead.
+  - **Privacy hardening** — `burnRedactions` is the strong
+    version for _redact_ regions; flattening drops the
+    recoverable original entirely for _all_ annotations,
+    including non-redact ones whose annotated visual the
+    publisher wants to keep but whose original capture they
+    don't want shippable.
+
+  ### Internal rename in annot-core
+
+  The private `removePngMetadata` helper in
+  `@ingcreators/annot-core/xmp-bytes` is renamed to
+  `stripPngEditableLayer` (clearer name describing what it does
+  rather than how it's used). Internal callers in the same
+  module updated. No external API change for the rename itself;
+  `writePngWithMetadata` + `writePngWithTagsOnly` keep their
+  existing signatures + behaviour.
+
+  ### Compatibility
+
+  Additive on annotator + core. No behaviour change for existing
+  callers (the only internal rename is a private helper).
+
 ## 0.2.1
 
 ### Patch Changes

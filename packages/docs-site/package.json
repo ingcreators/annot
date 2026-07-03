@@ -1,6 +1,6 @@
 {
   "name": "@ingcreators/annot-docs-site",
-  "version": "0.0.4",
+  "version": "0.0.6",
   "private": true,
   "description": "Astro Starlight documentation site for annot.work/docs. Reclaims the conventional `@ingcreators/annot-docs-site` name from the retired VitePress sibling in Phase 7 of `docs/plans/_done/annot-work-astro-unification.md`.",
   "repository": {
@@ -19,17 +19,17 @@
     "docs:tour": "playwright test"
   },
   "dependencies": {
-    "@astrojs/sitemap": "^3.7.2",
-    "@astrojs/starlight": "^0.39.2",
+    "@astrojs/sitemap": "^3.7.3",
+    "@astrojs/starlight": "^0.41.2",
     "@ingcreators/annot-product-docs": "workspace:*",
     "@ingcreators/annot-product-docs-astro": "workspace:*",
-    "astro": "^6.3.7",
-    "sharp": "^0.34.5"
+    "astro": "^7.0.6",
+    "sharp": "^0.35.3"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.4",
-    "@playwright/test": "^1.50.0",
+    "@playwright/test": "^1.61.1",
     "typescript": "catalog:",
-    "wrangler": "^4.94.0"
+    "wrangler": "^4.105.0"
   }
 }

@@ -41,6 +41,11 @@ export default defineConfig({
       entry: {
         index: resolve(__dirname, "src/index.ts"),
         "xmp-bytes": resolve(__dirname, "src/xmp/xmp-bytes.ts"),
+        // `@ingcreators/annot-playwright`'s dist externalises its
+        // `@ingcreators/annot-core/element-tree` import, so the
+        // published core tarball must serve the subpath. Tier A
+        // (canonical screen-capture model + YAML/JSON serializers).
+        "element-tree": resolve(__dirname, "src/element-tree/index.ts"),
       },
       formats: ["es"],
     },

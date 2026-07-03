@@ -5,7 +5,8 @@ name: Publish
 # `@ingcreators/annot-playwright`, `@ingcreators/annot-mcp`,
 # `@ingcreators/annot-product-docs`,
 # `@ingcreators/annot-product-docs-astro`,
-# `@ingcreators/annot-product-docs-xlsx` — via Changesets.
+# `@ingcreators/annot-product-docs-xlsx`,
+# `@ingcreators/annot-embed-protocol` — via Changesets.
 #
 # Note: `@ingcreators/annot-imagequant` was published at 0.1.0
 # and then retired by `replace-libimagequant-with-median-cut.md`;
@@ -129,7 +130,7 @@ jobs:
       # if npm CLI doesn't need one.
       id-token: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
@@ -181,6 +182,7 @@ jobs:
           --filter @ingcreators/annot-product-docs
           --filter @ingcreators/annot-product-docs-astro
           --filter @ingcreators/annot-product-docs-xlsx
+          --filter @ingcreators/annot-embed-protocol
           build
 
       # Sanity: `pnpm pack` round-trip catches `files` allowlist
@@ -190,7 +192,7 @@ jobs:
       - name: Verify pack contents
         run: |
           set -euo pipefail
-          for pkg in core annotator playwright mcp product-docs product-docs-astro product-docs-xlsx; do
+          for pkg in core annotator playwright mcp product-docs product-docs-astro product-docs-xlsx embed-protocol; do
             echo "── @ingcreators/annot-${pkg} pack contents ──"
             pnpm --filter @ingcreators/annot-${pkg} pack --pack-destination /tmp --dry-run 2>&1 \
               | grep -v "^[[:space:]]*$" || true
@@ -247,7 +249,7 @@ jobs:
         if: success() && inputs.dry-run != true
         run: |
           set -euo pipefail
-          for pkg in core annotator playwright mcp product-docs product-docs-astro product-docs-xlsx; do
+          for pkg in core annotator playwright mcp product-docs product-docs-astro product-docs-xlsx embed-protocol; do
             v=$(node -p "require('./packages/${pkg}/package.json').version")
             echo "✓ @ingcreators/annot-${pkg}@${v} → https://www.npmjs.com/package/@ingcreators/annot-${pkg}/v/${v}"
           done

@@ -80,7 +80,7 @@ jobs:
               packages/desktop/dist/*.msi
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
@@ -339,7 +339,7 @@ jobs:
     permissions:
       contents: write # `softprops/action-gh-release` needs this
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Download all installer artifacts
         uses: actions/download-artifact@v8

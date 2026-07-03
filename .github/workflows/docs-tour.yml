@@ -79,7 +79,7 @@ jobs:
     timeout-minutes: 15
     continue-on-error: true # advisory in Phase 5
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up pnpm
         uses: pnpm/action-setup@v6
@@ -126,7 +126,7 @@ jobs:
           steps.diff.outputs.changed == 'true'
           && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         id: app-token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.DOCS_TOUR_APP_ID }}
           private-key: ${{ secrets.DOCS_TOUR_APP_PRIVATE_KEY }}
@@ -139,7 +139,7 @@ jobs:
         if: |
           steps.diff.outputs.changed == 'true'
           && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ steps.app-token.outputs.token }}
           commit-message: |
