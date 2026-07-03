@@ -1,0 +1,10 @@
+# Pin the exact toolchain the committed prebuild was built with.
+# The verify-addon CI gate diffs a fresh build byte-for-byte against
+# prebuilds/win-clipboard.win32-x64.node, so an unpinned `stable`
+# channel breaks the gate every time upstream ships a new compiler.
+# When bumping this pin, rebuild + re-commit the prebuild in the same
+# PR (`bash scripts/verify-addon.sh` must pass locally).
+[toolchain]
+channel = "1.94.1"
+targets = ["x86_64-pc-windows-msvc"]
+profile = "minimal"
