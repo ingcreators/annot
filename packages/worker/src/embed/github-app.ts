@@ -87,6 +87,83 @@ export async function upsertGitHubInstallation(
   return row;
 }
 
+/** Why the caller may not act through an installation. `null`
+ *  means access is granted. */
+export type InstallationAccessDenial = "unclaimed" | "other_workspace";
+
+/** Workspace-ownership gate shared by `/api/embed/load`,
+ *  `/api/embed/commit`, and (with its claim-if-unclaimed
+ *  exception) `PATCH /api/embed/installations/:id`.
+ *
+ *  An installation is usable only by the workspace that claimed
+ *  it — otherwise any authenticated annot.work user could read
+ *  and commit through ANY repo the App is installed on. Claiming
+ *  happens via the PATCH endpoint (interim flow until the
+ *  dashboard ships a proper claim UI). */
+export function checkInstallationWorkspaceAccess(
+  installation: GitHubInstallationRow,
+  workspaceId: string,
+): InstallationAccessDenial | null {
+  if (installation.workspace_id === null) return "unclaimed";
+  if (installation.workspace_id !== workspaceId) return "other_workspace";
+  return null;
+}
+
+/** One entry of the `target_paths_json` allowlist — see the
+ *  column doc on `GitHubInstallationRow`. */
+export interface TargetPathRule {
+  /** Full `owner/name` repo slug (matched case-insensitively —
+   *  GitHub slugs are case-insensitive). */
+  repo: string;
+  /** Path prefix inside the repo. Empty string allows the whole
+   *  repo. */
+  pathPrefix: string;
+}
+
+/** Parse `github_installations.target_paths_json`.
+ *
+ *  - `null` column → `null` (no allowlist; every path in the
+ *    installation's repo set is allowed).
+ *  - Malformed JSON / non-array → `[]` (fail CLOSED: an
+ *    allowlist we can't read must not become "allow all").
+ *  - Entries without string `repo` + `pathPrefix` are dropped. */
+export function parseTargetPaths(json: string | null): TargetPathRule[] | null {
+  if (json === null) return null;
+  let value: unknown;
+  try {
+    value = JSON.parse(json);
+  } catch {
+    console.error("[embed] target_paths_json is not valid JSON; failing closed");
+    return [];
+  }
+  if (!Array.isArray(value)) {
+    console.error("[embed] target_paths_json is not an array; failing closed");
+    return [];
+  }
+  return value.filter(
+    (entry): entry is TargetPathRule =>
+      typeof entry === "object" &&
+      entry !== null &&
+      typeof (entry as TargetPathRule).repo === "string" &&
+      typeof (entry as TargetPathRule).pathPrefix === "string",
+  );
+}
+
+/** True when `path` inside `repo` is covered by the allowlist.
+ *  `rules === null` means the installation has no allowlist and
+ *  every path is allowed. */
+export function isTargetPathAllowed(
+  rules: TargetPathRule[] | null,
+  repo: string,
+  path: string,
+): boolean {
+  if (rules === null) return true;
+  const repoLower = repo.toLowerCase();
+  return rules.some(
+    (rule) => rule.repo.toLowerCase() === repoLower && path.startsWith(rule.pathPrefix),
+  );
+}
+
 /** Find an installation by GitHub-assigned id. Returns null on
  *  cache-miss; callers must handle the absence (404 for the embed
  *  endpoint, 401 for the dashboard). */

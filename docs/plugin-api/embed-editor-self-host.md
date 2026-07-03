@@ -183,6 +183,20 @@ prints the resulting binding IDs so you can paste them into
 
 ## Operational notes
 
+- **Claim the installation before first use**: `/api/embed/load`
+  and `/api/embed/commit` only serve installations claimed by the
+  caller's workspace (`github_installations.workspace_id`).
+  Webhook-created rows start unclaimed; claim one by issuing any
+  `PATCH /api/embed/installations/:id` while signed in to the
+  owning workspace (an empty-change PATCH like
+  `{ "repoPolicy": "pr-mode" }` is enough — the first PATCH
+  claims an unclaimed installation for the caller's workspace):
+  ```sh
+  curl -X PATCH https://annot.example.com/api/embed/installations/<id> \
+    -H "Cookie: annot_session=<your-session-cookie>" \
+    -H "Content-Type: application/json" \
+    -d '{ "repoPolicy": "pr-mode" }'
+  ```
 - **GitHub App webhook**: not consumed by 5z-1; future
   installation-lifecycle handling lives here.
 - **Build hooks**: configure per-installation via
@@ -215,6 +229,8 @@ prints the resulting binding IDs so you can paste them into
 | Symptom | Likely cause |
 |---|---|
 | `/api/embed/health` returns `ok: false` with one secret false | The matching `wrangler secret put` step was skipped. Re-run it and redeploy. |
+| Load / Save returns `not_authorised` (403) | The installation is unclaimed, or claimed by a different workspace. Claim it via `PATCH /api/embed/installations/:id` from the owning workspace (see "Claim the installation" above). |
+| Load / Save returns `path_not_allowed` (403) | The requested paths fall outside the installation's `target_paths_json` allowlist. Widen (or NULL) the allowlist on the `github_installations` row. |
 | The editor loads, but Save 404s | The GitHub App isn't installed on the target repo. Visit the App's settings page → Install. |
 | Save returns `plan_required` (403) | The user account's plan doesn't allow private repos. Use a public repo OR upgrade the user's `users.plan` row. |
 | `Save → conflict` (409) on every save | Someone else pushed to the same file between load + save. Reload the editor (the load endpoint refreshes the blob sha) and re-save. |

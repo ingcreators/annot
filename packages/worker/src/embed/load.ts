@@ -7,10 +7,13 @@
 //      `<AnnotEditButton>`).
 //   2. Authorise the visitor via session cookie (cloud-roadmap
 //      Phase 3 — in production at `annot.work/api/*`).
-//   3. Look up the github_installations row by repo owner. The
-//      account_login lookup is what lets a visitor whose own
-//      installation has been registered hit the endpoint without
-//      additional pairing.
+//   3. Look up the github_installations row by repo owner, then
+//      require that the caller's workspace has CLAIMED the
+//      installation (via `PATCH /api/embed/installations/:id`)
+//      and that the requested paths pass the installation's
+//      `target_paths_json` allowlist. Without the claim check any
+//      authenticated annot.work user could read files (and, via
+//      5y-4, commit) through any repo the App is installed on.
 //   4. Mint an installation token (cached in SESSIONS KV) and
 //      read repo metadata to discover the default branch + private
 //      flag.
@@ -29,7 +32,13 @@ import { EmbedRequestUrlError, parseEmbedRequestUrl } from "@ingcreators/annot-e
 import type { Context } from "hono";
 import { requireAuth } from "../auth-middleware.js";
 import type { Env } from "../index.js";
-import { findGitHubInstallationByAccount, type GitHubInstallationRow } from "./github-app.js";
+import {
+  checkInstallationWorkspaceAccess,
+  findGitHubInstallationByAccount,
+  type GitHubInstallationRow,
+  isTargetPathAllowed,
+  parseTargetPaths,
+} from "./github-app.js";
 import { getInstallationToken, readRepoFile, readRepoInfo } from "./github-app-token.js";
 
 /** Plans that may load PRIVATE repos via the embed endpoint.
@@ -93,6 +102,37 @@ export async function handleEmbedLoad(c: Context<{ Bindings: Env }>): Promise<Re
       },
       404,
     );
+  }
+
+  // ── 3.5 Workspace ownership + path allowlist ──────────────
+  // Both checks run BEFORE any token is minted so unauthorised
+  // callers never trigger GitHub API traffic.
+  const denial = checkInstallationWorkspaceAccess(installation, auth.workspaceId);
+  if (denial) {
+    return c.json(
+      {
+        ok: false,
+        error: "not_authorised",
+        message:
+          denial === "unclaimed"
+            ? `Installation ${installation.id} is not claimed by any workspace yet. Claim it from the workspace that owns "${repoOwner}": PATCH /api/embed/installations/${installation.id} (see docs/plugin-api/embed-editor-self-host.md).`
+            : "This installation is claimed by another workspace.",
+      },
+      403,
+    );
+  }
+  const targetPaths = parseTargetPaths(installation.target_paths_json);
+  for (const path of [parsed.pngPath, parsed.annotationsPath]) {
+    if (!isTargetPathAllowed(targetPaths, parsed.repo, path)) {
+      return c.json(
+        {
+          ok: false,
+          error: "path_not_allowed",
+          message: `"${path}" is outside the installation's target-path allowlist.`,
+        },
+        403,
+      );
+    }
   }
 
   // ── 4. Mint an installation token + read repo info ────────

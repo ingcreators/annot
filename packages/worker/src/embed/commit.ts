@@ -2,8 +2,14 @@
 //
 // Receives the edited annotation yaml (and optionally a fresh
 // PNG) from the embed shell, mints an installation token for the
-// target repo, and commits via the GitHub Contents API. The
-// per-installation `repo_policy` decides between:
+// target repo, and commits via the GitHub Contents API.
+//
+// Authorisation: the caller's workspace must have claimed the
+// installation (`github_installations.workspace_id`), the target
+// repo must belong to the installation's account, and the target
+// paths must pass the `target_paths_json` allowlist — all checked
+// before any token is minted. The per-installation `repo_policy`
+// then decides between:
 //
 //   - `direct-push` — commits straight to the
 //     `default_branch_override ?? <repo default>` branch.
@@ -39,7 +45,13 @@ import { requireAuth } from "../auth-middleware.js";
 import type { Env } from "../index.js";
 import { recordAuditEvent } from "../storage-repo.js";
 import { pingBuildHook } from "./build-trigger.js";
-import { findGitHubInstallationById, type GitHubInstallationRow } from "./github-app.js";
+import {
+  checkInstallationWorkspaceAccess,
+  findGitHubInstallationById,
+  type GitHubInstallationRow,
+  isTargetPathAllowed,
+  parseTargetPaths,
+} from "./github-app.js";
 import { getInstallationToken } from "./github-app-token.js";
 
 const COMMIT_MESSAGE_PREFIX = "Annot edit via annot.work/embed";
@@ -134,6 +146,53 @@ export async function handleEmbedCommit(c: Context<{ Bindings: Env }>): Promise<
       },
       404,
     );
+  }
+
+  // ── 3.5 Workspace ownership + repo binding + allowlist ────
+  // All three checks run BEFORE any token is minted so
+  // unauthorised callers never trigger GitHub API traffic.
+  //
+  // Repo binding: `installationId` arrives from the client, so
+  // the requested repo must actually belong to that
+  // installation's account — otherwise a caller could pair an
+  // arbitrary claimed installation with an unrelated repo slug.
+  const repoOwner = body.repo.split("/")[0] as string;
+  if (repoOwner.toLowerCase() !== installation.account_login.toLowerCase()) {
+    return c.json(
+      {
+        ok: false,
+        error: "not_authorised",
+        message: `Installation ${installation.id} covers repos under "${installation.account_login}", not "${repoOwner}".`,
+      },
+      403,
+    );
+  }
+  const denial = checkInstallationWorkspaceAccess(installation, auth.workspaceId);
+  if (denial) {
+    return c.json(
+      {
+        ok: false,
+        error: "not_authorised",
+        message:
+          denial === "unclaimed"
+            ? `Installation ${installation.id} is not claimed by any workspace yet. Claim it from the workspace that owns "${installation.account_login}": PATCH /api/embed/installations/${installation.id} (see docs/plugin-api/embed-editor-self-host.md).`
+            : "This installation is claimed by another workspace.",
+      },
+      403,
+    );
+  }
+  const targetPaths = parseTargetPaths(installation.target_paths_json);
+  for (const path of [body.pngPath, body.annotationsPath]) {
+    if (!isTargetPathAllowed(targetPaths, body.repo, path)) {
+      return c.json(
+        {
+          ok: false,
+          error: "path_not_allowed",
+          message: `"${path}" is outside the installation's target-path allowlist.`,
+        },
+        403,
+      );
+    }
   }
 
   // ── 4. Mint installation token ────────────────────────────
