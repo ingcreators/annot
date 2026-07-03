@@ -60,3 +60,6 @@ secrets/
 # Claude Code (local-only)
 .claude/settings.local.json
 .claude/worktrees/
+
+# Devcontainer local-only secrets
+.devcontainer/devcontainer.local.env
