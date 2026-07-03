@@ -1,0 +1,15 @@
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    volumes:
+      - ..:/workspace/annot:cached
+
+    command: sleep infinity
+
+    # Local-only secrets (gitignored): GH_TOKEN for gh, API keys, etc.
+    env_file:
+      - path: ./devcontainer.local.env
+        required: false
