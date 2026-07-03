@@ -1,6 +1,6 @@
 {
   "name": "@ingcreators/annot-product-docs-astro",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Astro integration for `@ingcreators/annot-product-docs`. Wires the MDX components (`<Screen>` / `<Overlay>` / `<Transition>` / `<HistoryEntry>` / `<ScreenList>` / `<TransitionGraph>`) into an Astro site and supplies the Image Service that renders annotated PNGs from `<Screen>` blocks at build time. Phase 2 of docs/plans/living-product-docs.md.",
   "license": "Apache-2.0",
   "author": "ingcreators",
@@ -81,7 +81,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
-    "astro": "^6.4.8",
+    "astro": "^7.0.6",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plugin-dts": "^5.0.3"
@@ -94,6 +94,6 @@
     "@ingcreators/annot-product-docs": "workspace:*"
   },
   "peerDependencies": {
-    "astro": "^5.0.0 || ^6.0.0"
+    "astro": "^5.0.0 || ^6.0.0 || ^7.0.0"
   }
 }
