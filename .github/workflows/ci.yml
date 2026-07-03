@@ -195,11 +195,15 @@ jobs:
               - 'packages/desktop/native/win-clipboard/**'
               - '.github/workflows/ci.yml'
 
-      - name: Set up Rust + MSVC target
+      # No-arg `rustup toolchain install` reads the channel + targets
+      # from the addon's rust-toolchain.toml. Byte-for-byte verify
+      # only works against the exact compiler the committed prebuild
+      # was built with — an unpinned `stable` broke the gate whenever
+      # upstream shipped a new compiler.
+      - name: Set up Rust + MSVC target (pinned via rust-toolchain.toml)
         if: steps.filter.outputs.win-clipboard == 'true'
-        run: |
-          rustup toolchain install stable --profile minimal
-          rustup target add x86_64-pc-windows-msvc
+        working-directory: packages/desktop/native/win-clipboard
+        run: rustup toolchain install
 
       - name: Cache cargo registry + build
         if: steps.filter.outputs.win-clipboard == 'true'
@@ -209,7 +213,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             packages/desktop/native/win-clipboard/target
-          key: cargo-win-clipboard-${{ runner.os }}-${{ hashFiles('packages/desktop/native/win-clipboard/Cargo.lock') }}
+          key: cargo-win-clipboard-${{ runner.os }}-${{ hashFiles('packages/desktop/native/win-clipboard/Cargo.lock', 'packages/desktop/native/win-clipboard/rust-toolchain.toml') }}
           restore-keys: |
             cargo-win-clipboard-${{ runner.os }}-
 
