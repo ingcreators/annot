@@ -1,5 +1,11 @@
 # @ingcreators/annot-product-docs-xlsx
 
+## 0.2.3
+
+### Patch Changes
+
+- @ingcreators/annot-product-docs@0.4.1
+
 ## 0.2.2
 
 ### Patch Changes
