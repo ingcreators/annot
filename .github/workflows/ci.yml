@@ -207,7 +207,7 @@ jobs:
 
       - name: Cache cargo registry + build
         if: steps.filter.outputs.win-clipboard == 'true'
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
