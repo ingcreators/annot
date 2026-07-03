@@ -50,11 +50,11 @@ self.onmessage = async (e: MessageEvent<WorkerTask>) => {
     const result = await encodeCapture(dataUrl, options);
     const resp: WorkerResponseOk = { reqId, ok: true, result };
     (self as unknown as Worker).postMessage(resp);
-  } catch (err: any) {
+  } catch (err) {
     const resp: WorkerResponseErr = {
       reqId,
       ok: false,
-      error: err?.message || String(err),
+      error: err instanceof Error && err.message ? err.message : String(err),
     };
     (self as unknown as Worker).postMessage(resp);
   }

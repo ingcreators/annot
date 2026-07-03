@@ -31,4 +31,30 @@ allowBuilds:
 # 3+ packages.
 catalog:
   typescript: ^6.0.3
-  vite: ^8.0.14
+  vite: ^8.0.16
+
+# Security-advisory overrides for transitive dependencies we don't
+# control directly (kept range-scoped so a future major bump of the
+# parent drops the override naturally). pnpm 11 reads overrides from
+# this file — the legacy `pnpm.overrides` field in package.json was
+# silently ignored, which is why it was migrated here.
+overrides:
+  # GHSA advisory: serialize-javascript XSS (<7.0.3)
+  "serialize-javascript@<7.0.3": ">=7.0.3"
+  # GHSA advisory: form-data CRLF injection (electron-builder chain)
+  "form-data@>=4.0.0 <4.0.6": ">=4.0.6"
+  # GHSA advisory: hono CORS middleware origin reflection
+  # (@modelcontextprotocol/sdk > @hono/node-server chain resolves its
+  # own hono instance, separate from the worker's direct dependency)
+  "hono@<4.12.25": ">=4.12.25"
+  # GHSA advisory: tmp path traversal (exceljs + electron-builder chains)
+  "tmp@<0.2.6": ">=0.2.6"
+  # GHSA advisories: undici WebSocket DoS / TLS bypass / SOCKS5 routing
+  # (wrangler > miniflare chain)
+  "undici@<6.27.0": ">=6.27.0 <7.0.0"
+  "undici@>=7.0.0 <7.28.0": ">=7.28.0"
+  # GHSA advisory: ws memory-exhaustion DoS (vitest + miniflare chains)
+  "ws@>=8.0.0 <8.21.0": ">=8.21.0"
+  # NOTE: the vite 7.x server.fs.deny advisory (astro 6 chain) is NOT
+  # overridden here — an override rewrites Storybook's / vite-plugin-dts'
+  # peer ranges too. The astro 6.4.6 bump re-resolves its vite to 7.3.5.

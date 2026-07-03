@@ -1,6 +1,6 @@
 {
   "name": "@ingcreators/annot-playwright",
-  "version": "0.4.0",
+  "version": "0.4.2",
   "description": "Playwright fixture for annotated screenshots — emit annotated PNGs from failing tests without leaving the test file. Pairs `test.extend({ annotator })` with the headless renderer from @ingcreators/annot-annotator.",
   "license": "Apache-2.0",
   "author": "ingcreators",
@@ -51,10 +51,10 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@playwright/test": "^1.50.0",
+    "@playwright/test": "^1.61.1",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vite-plugin-dts": "^5.0.1"
+    "vite-plugin-dts": "^5.0.3"
   },
   "dependencies": {
     "@ingcreators/annot-annotator": "workspace:*",

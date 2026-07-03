@@ -41,6 +41,15 @@ if ! cmp -s "$committed" "$fresh"; then
   echo "verify-addon: committed $committed differs from a fresh build." >&2
   echo "  committed: $(stat -c %s "$committed" 2>/dev/null || wc -c < "$committed") bytes" >&2
   echo "  fresh:     $(stat -c %s "$fresh" 2>/dev/null || wc -c < "$fresh") bytes" >&2
+  echo "" >&2
+  echo "  The canonical build environment is the windows-latest CI runner:" >&2
+  echo "  byte-identity requires the same rustc (pinned in rust-toolchain.toml)" >&2
+  echo "  AND the same MSVC linker. A different local Visual Studio version" >&2
+  echo "  produces a diverging Rich header / PE layout, so a local mismatch" >&2
+  echo "  does not by itself mean the source changed." >&2
+  echo "  To refresh the committed prebuild after an intentional change:" >&2
+  echo "  download the 'win-clipboard-fresh-prebuild' artifact from the" >&2
+  echo "  failed CI run and commit it as $committed." >&2
   exit 1
 fi
 

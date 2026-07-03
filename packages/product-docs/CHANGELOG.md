@@ -1,5 +1,277 @@
 # @ingcreators/annot-product-docs
 
+## 0.4.1
+
+### Patch Changes
+
+- Updated dependencies [b47d896]
+  - @ingcreators/annot-core@0.3.1
+  - @ingcreators/annot-annotator@0.6.0
+  - @ingcreators/annot-playwright@0.4.2
+
+## 0.4.0
+
+### Minor Changes
+
+- b5d52f6: **Annotation palette composes onto the annotated PNG** — Phase 3c
+  of `docs/plans/living-spec-authoring-roadmap.md`. The Astro Image
+  Service's `renderAnnotatedScreen` now reads the Phase 3a yaml
+  `annotations[]` section and bakes the full visual palette
+  (rect / circle / arrow / text / callout / freehand / redact /
+  focusMask) onto the base PNG, layered underneath the existing
+  numbered-badge overlays.
+
+  ### New public surface — `@ingcreators/annot-product-docs`
+
+  `buildShapeAnnotationsFromYaml(annotations, boxed, dims) →
+BboxAnnotation[]` maps each Phase 3a `AnnotationSpec` against the
+  page's `BoxedEntry[]` (from snapshot YAML or PNG XMP ElementTree)
+  and produces `BboxAnnotation` shapes the headless annotator's
+  `bboxAnnotationsToSvg` consumes. Per-variant resolution:
+  - **`rect`** — `match` / `coversElements[]` / `bbox`. `coversElements`
+    unions the per-element bboxes into one.
+  - **`circle`** — match-anchored circles centre on the element bbox
+    with radius defaulting to half the longer axis; `center` + `radius`
+    is the free-coord form.
+  - **`arrow`** — endpoints can be `{ match }` (centre-to-centre) or
+    `{ point }`.
+  - **`text`** — `anchor.position` (above / below / left / right /
+    center) offsets a centred / left- / right-anchored label by 8 px
+    outside the element bbox.
+  - **`callout`** — target = match-resolved or free-coord bbox; `at`
+    is the caption position.
+  - **`freehand`** — passes through verbatim.
+  - **`redact`** — style: `solid` renders as a filled rect (default
+    fill `#222222`, no stroke); `fill` / `stroke` overrides honoured.
+  - **`focusMask`** — cutout expands by `padding` (match-anchored);
+    outer rect collapses to the supplied image dims.
+
+  Intent mapping mirrors the existing badge path
+  (`required → error`, `action → warning`, others pass through).
+
+  Match resolution failures are silently skipped — the drift
+  detector (Phase 3d) surfaces them upstream so the build keeps
+  producing a useful PNG even when the snapshot has drifted.
+
+  ### Behaviour change — `renderAnnotatedScreen`
+
+  When `<Screen annotations="…">` resolves to a yaml carrying
+  `annotations[]`, the renderer composes shapes (underneath) + badges
+  (on top) into one SVG fragment via `svgFromBboxAnnotations`. The
+  cache key already includes the annotations-yaml source from
+  Phase 2b, so edits to the yaml bust the cached PNG without extra
+  bookkeeping. Pre-Phase-3 yaml files (no `annotations` key) parse
+  - render unchanged.
+
+  ### Compatibility
+
+  Additive. Existing callers that only use `overlays[]` see no
+  behaviour change. The new `buildShapeAnnotationsFromYaml` export
+  is opt-in.
+
+- fa712fd: **Annotation palette drift + xlsx coverage (Phase 3d)** — closes
+  Phase 3 of `docs/plans/living-spec-authoring-roadmap.md`.
+
+  ### Drift detector — `yamlAnnotations` opt-in
+
+  `detectDrift` / `detectDriftFromYaml` / `detectDriftFromElementTree`
+  gain an optional `yamlAnnotations: readonly AnnotationSpec[]`
+  field. When set, the detector walks the match keys reachable from
+  each Phase 3a `AnnotationSpec` (via the new
+  `collectMatchKeysFromAnnotation(spec) → MatchKey[]` helper) and
+  runs them through the same match-cycle as overlays — emitting
+  `removed` / `renamed` / `role-changed` / `duplicated` findings
+  with the annotation `id` referenced in the message.
+
+  Free-coord variants (`bbox`-only rect / `point`-only arrow
+  endpoint / `at`-only text / `bbox`-only callout target /
+  freehand / `bbox`-only redact / `bbox`-only focusMask cutout)
+  contribute zero keys and pass through silently.
+
+  `annotations[]` IDs are NEVER referenced from `<AnnotCallout for>`
+  (overlays[] owns that contract), so no
+  `description-missing` / `description-orphan` findings fire for
+  this source.
+
+  ### Excel adapter — yaml-driven rows for migrated screens
+
+  `@ingcreators/annot-product-docs-xlsx`'s `extractFromParsed`
+  gains an optional `annotationsYamlByPath` context map. When a
+  `<Screen>` carries `annotations="…"` and the matching yaml is in
+  the map, the item-table rows are sourced from the yaml's
+  `overlays[]` (each row's body cross-referenced from
+  `screen.callouts` by id). `extractMdxFile` loads each
+  referenced yaml file from disk automatically — missing files are
+  a loud failure on the same "explicit reference, but file gone"
+  reasoning the Astro Image Service uses.
+
+  `annotations[]` entries in the yaml are deliberately NOT
+  surfaced as rows. The Astro Image Service composes them onto
+  the annotated PNG; the Excel adapter renders the resulting image
+  in the spreadsheet's picture column while the items table stays
+  scoped to overlays.
+
+  ### workflow-app dogfood
+
+  `examples/workflow-app/docs/books/operation-manual/OM-001-login.mdx`
+  migrates from inline `<Overlay>` to the
+  `<Screen annotations="./OM-001-login.annotations.yaml">` +
+  `<AnnotCallout for>` form. The companion yaml ships three
+  overlays plus three `annotations[]` entries exercising
+  `rect` + `arrow` + `focusMask` — the full Phase 3 palette
+  end-to-end through the workflow-app's docs build.
+
+  ### Compatibility
+
+  Additive. Existing drift callers see no behaviour change unless
+  they opt in to `yamlAnnotations`. Existing xlsx callers see no
+  behaviour change unless they migrate a screen to the yaml form;
+  inline-`<Overlay>` screens continue to drive rows as before.
+
+- f09a6b1: **Annotation yaml `redact.style` accepts `mosaic` / `blur`** —
+  Phase 3f of `docs/plans/living-spec-authoring-roadmap.md`
+  (Phase 3 follow-up).
+
+  The Phase 3a parser shipped `redact.style: "solid"` only; mosaic
+  / blur were explicitly rejected with a "reserved for follow-up"
+  message. Phase 3f widens the enum to all three (`solid` /
+  `mosaic` / `blur`) so authoring tools and the Astro Image
+  Service can use the values end-to-end.
+
+  ### Parser behaviour
+
+  ```yaml
+  # Phase 3a: accepted
+  annotations:
+    - id: redact-1
+      kind: redact
+      bbox: { x: 0, y: 0, width: 100, height: 30 }
+      style: solid
+
+  # Phase 3f: NEW — both accepted
+  annotations:
+    - id: redact-2
+      kind: redact
+      match: { role: textbox, name: Reason }
+      style: mosaic
+    - id: redact-3
+      kind: redact
+      bbox: { x: 421, y: 269, width: 438, height: 40 }
+      style: blur
+  ```
+
+  Unknown style values still error with an updated message:
+  `redact.style must be one of "solid" / "mosaic" / "blur"`.
+
+  ### Render behaviour (transitional)
+
+  Between 3f (this PR) and 3g (Astro Image Service raster
+  pre-processing), `mosaic` and `blur` redact entries are
+  parser-accepted but the Image Service still routes them
+  through the SVG-fragment filled-rect path — so they LOOK
+  identical to `solid` until 3g lands. 3g wires the raster
+  pass that gives `mosaic` / `blur` their distinct visual
+  output.
+
+  ### New public type
+
+  `RedactAnnotationStyle` (the `"solid" | "mosaic" | "blur"` union)
+  is exported from `@ingcreators/annot-product-docs` so callers
+  can reference it directly.
+
+  ### Compatibility
+
+  Additive within v1. Pre-3f files (no redact entries, or
+  `style: solid` only) parse identically. Files authored with
+  `style: "mosaic" | "blur"` are rejected by the pre-3f parser
+  (loud failure pointing at the unsupported style) — consumers
+  on older `@ingcreators/annot-product-docs` upgrade to consume
+  the new files.
+
+- 0d19345: **Astro Image Service bakes mosaic / blur redacts onto the base
+  PNG** — Phase 3g of `docs/plans/living-spec-authoring-roadmap.md`
+  (Phase 3 follow-up).
+
+  When a screen's `annotations[]` yaml carries
+  `redact { style: "mosaic" | "blur" }` entries, the renderer now
+  calls `burnRedactions` from `@ingcreators/annot-annotator` on
+  the base PNG before SVG-fragment composition. `style: solid`
+  redacts continue to flow through the existing SVG filled-rect
+  path — avoiding an unnecessary PNG round-trip for the common
+  solid case.
+
+  ### New public surface
+
+  `buildRasterRedactRegionsFromYaml(annotations, boxed) →
+BboxRedactRegion[]` (exported from
+  `@ingcreators/annot-product-docs`) walks `annotations[]` for
+  raster-style redact entries, resolves each cutout to a bbox,
+  and emits regions ready for `burnRedactions`. Match-anchored
+  entries whose `match` doesn't resolve are skipped silently —
+  the drift detector (Phase 3d) surfaces them upstream so the
+  build keeps producing a useful PNG while the snapshot
+  catches up.
+
+  ### `renderAnnotatedScreen` flow
+
+  ```
+  load base PNG bytes
+     ↓
+  read element-tree bboxes
+     ↓
+  walk annotations[] → split into:
+     • raster redacts (mosaic / blur) → burnRedactions(base, regions)
+     • SVG annotations (rect / circle / arrow / text / callout
+       / freehand / solid-redact / focusMask / numberedBadge)
+     ↓
+  compose SVG fragments on top of the (possibly burned) base PNG
+     ↓
+  emit final PNG (flat or editable)
+  ```
+
+  ### `mapRedact` change
+
+  `mapRedact` in `mdx-annotations.ts` now returns `null` for
+  `style: "mosaic" | "blur"` so those entries don't double-bake
+  as a filled rect on top of the already-pixelated bitmap. Solid
+  redacts continue to produce a `BboxRectAnnotation` for the SVG
+  path.
+
+  ### `hadBoundingBoxes` semantics
+
+  The flag flips true when raster redacts resolved through bbox
+  data, even when no SVG annotations composed on top. This
+  matches the flag's intent ("we used the snapshot's bbox data
+  to produce a useful render") — a screen with only a mosaic
+  redact still benefited from the bbox tour.
+
+  ### Caching
+
+  The cache key already includes the annotations-yaml source
+  bytes (Phase 2b), so editing a yaml `style: mosaic` → `style:
+blur` value busts the cached PNG without additional
+  bookkeeping.
+
+  ### Compatibility
+
+  Additive. Existing screens (no `annotations[]`, or
+  `annotations[]` with no raster-style redacts) render
+  byte-identical. mosaic / blur redacts that were parser-accepted
+  in 3f but rendered as solid rects now render as their proper
+  raster effect.
+
+### Patch Changes
+
+- Updated dependencies [6124d59]
+- Updated dependencies [0c7ac26]
+- Updated dependencies [64dc6e8]
+- Updated dependencies [691bec5]
+- Updated dependencies [9697f27]
+- Updated dependencies [266b05a]
+  - @ingcreators/annot-annotator@0.6.0
+  - @ingcreators/annot-core@0.3.0
+  - @ingcreators/annot-playwright@0.4.1
+
 ## 0.3.0
 
 ### Minor Changes
