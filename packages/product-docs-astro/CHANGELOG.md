@@ -1,5 +1,24 @@
 # @ingcreators/annot-product-docs-astro
 
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies [6124d59]
+- Updated dependencies [b5d52f6]
+- Updated dependencies [fa712fd]
+- Updated dependencies [0c7ac26]
+- Updated dependencies [f09a6b1]
+- Updated dependencies [0d19345]
+- Updated dependencies [64dc6e8]
+- Updated dependencies [691bec5]
+- Updated dependencies [9697f27]
+- Updated dependencies [266b05a]
+  - @ingcreators/annot-annotator@0.6.0
+  - @ingcreators/annot-product-docs@0.4.0
+  - @ingcreators/annot-core@0.3.0
+  - @ingcreators/annot-playwright@0.4.1
+
 ## 0.3.0
 
 ### Minor Changes

@@ -1,5 +1,15 @@
 # @ingcreators/annot-product-docs-xlsx
 
+## 0.2.2
+
+### Patch Changes
+
+- Updated dependencies [b5d52f6]
+- Updated dependencies [fa712fd]
+- Updated dependencies [f09a6b1]
+- Updated dependencies [0d19345]
+  - @ingcreators/annot-product-docs@0.4.0
+
 ## 0.2.1
 
 ### Patch Changes
