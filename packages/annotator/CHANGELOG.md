@@ -1,5 +1,300 @@
 # @ingcreators/annot-annotator
 
+## 0.6.0
+
+### Minor Changes
+
+- 6124d59: **`BboxAnnotation` palette extensions: `freehand` + `focusMask`** —
+  Phase 3b of `docs/plans/living-spec-authoring-roadmap.md`.
+
+  Two new variants on the `BboxAnnotation` union expose the rest of
+  the Annot visual palette to `bboxAnnotationsToSvg()` and through
+  it to `Annotator.toPng()` / `.toSvg()` / `.toEditablePng()`:
+
+  ```ts
+  // Free-form path stroke — `path` is the SVG <path> `d` attribute.
+  {
+    type: "freehand",
+    path: "M100,200 L150,250 L200,210",
+    intent: "info",        // optional — defaults to "error"
+    strokeWidth: 4,        // optional — defaults to 2
+    fill: "#ffeecc",       // optional — defaults to "none"
+  }
+
+  // Dim everything except the cutout region. One <path> with
+  // fill-rule="evenodd" combines a full-image rect with the
+  // cutout — the even-odd rule cancels overlap.
+  {
+    type: "focusMask",
+    cutout: { x: 200, y: 100, width: 80, height: 40 },
+    imageWidth: 1280,
+    imageHeight: 800,
+    dimColor: "rgba(0,0,0,0.5)",   // optional — default same value
+  }
+  ```
+
+  `@ingcreators/annot-product-docs`'s `<Screen annotations>`
+  Image Service composition (Phase 3c) will map yaml
+  `AnnotationSpec` entries to these two primitives plus the
+  existing `rect` / `circle` / `arrow` / `text` / `callout` /
+  `numberedBadge` shapes. Useful standalone for any annotator
+  caller (Playwright fixtures, MCP server, custom test reporters)
+  without involving yaml or MDX.
+
+  **JSON schemas** — `BBOX_ANNOTATION_SCHEMA.oneOf` gains
+  `BBOX_FREEHAND` + `BBOX_FOCUS_MASK` entries so MCP callers can
+  validate either kind at the boundary.
+
+  **Out of scope** — redact (mosaic / blur) needs raster pixel
+  access and is not implementable as an SVG fragment; it stays
+  on the existing destructive `burnRedactions` path in
+  `@ingcreators/annot-mcp`. Phase 3a's annotation yaml rejects
+  `style: "mosaic" | "blur"` accordingly.
+
+  **Compatibility** — additive. Existing `BboxAnnotation` callers
+  keep working; the new variants are opt-in by setting
+  `type: "freehand" | "focusMask"`.
+
+- 0c7ac26: **Relocate `burnRedactions` from `@ingcreators/annot-mcp` to
+  `@ingcreators/annot-annotator`** — Phase 3e of
+  `docs/plans/living-spec-authoring-roadmap.md` (Phase 3 follow-up).
+
+  The destructive raster burn primitive (solid / mosaic / blur over
+  a PNG buffer, built on `@napi-rs/canvas`) historically lived in
+  `@ingcreators/annot-mcp` because the MCP server's
+  `annot_redact_screenshot` tool was the first caller. The function
+  itself has no MCP-specific surface — it's pure
+  (`pngBytes + regions → pngBytes`). To let non-MCP callers consume
+  it without dragging the MCP server's dep footprint (Playwright,
+  `@modelcontextprotocol/sdk`, etc.), the primitive moves to
+  `@ingcreators/annot-annotator` — the canonical Node-side raster
+  home, which already depends on `@napi-rs/canvas` for its encode
+  pipeline (so the move adds **zero** transitive deps).
+
+  ### `@ingcreators/annot-annotator` — new public surface
+
+  ```ts
+  import {
+    burnRedactions,
+    type RedactRegion,
+  } from "@ingcreators/annot-annotator";
+
+  const out = await burnRedactions(pngBytes, [
+    {
+      bbox: { x: 10, y: 20, width: 100, height: 30 },
+      style: "solid",
+      color: "#000000",
+    },
+    { bbox: { x: 200, y: 100, width: 80, height: 40 }, style: "mosaic" },
+    { bbox: { x: 0, y: 0, width: 64, height: 64 }, style: "blur" },
+  ]);
+  ```
+
+  `RedactRegion` is exposed as an alias of `BboxRedactRegion`
+  (structurally identical, already declared in the DSL types) so
+  existing MCP-side consumers see no shape change.
+
+  ### `@ingcreators/annot-mcp` — no public API change
+
+  The existing `burnRedactions` + `RedactRegion` re-exports from
+  the package root keep working byte-identical, sourced from the
+  annotator instead of the old MCP-local file. MCP's
+  `annot_redact_screenshot` / `annot_redact_url` tools continue
+  to import from `../redact/burn.js`, which is now a one-line
+  re-export from annotator.
+
+  ### Compatibility
+
+  Additive on annotator's side; zero behaviour change on MCP's
+  side. Tests move with the code (annotator 64 → 71 passed; MCP
+  91 → 84 passed — same scenarios at the new home).
+
+  ### Out of scope
+
+  `@napi-rs/canvas` stays as an MCP direct dep — `compare/diff.ts`
+  and several other MCP tool tests still use it directly, so
+  collapsing it onto a transitive-via-annotator import is a
+  separate cleanup.
+
+- 64dc6e8: **Relocate `diffScreenshots` from `@ingcreators/annot-mcp` to
+  `@ingcreators/annot-annotator`** — Phase 3i of
+  `docs/plans/living-spec-authoring-roadmap.md` (Phase 3
+  follow-up #2). Same pattern as 3e's `burnRedactions` relocate.
+
+  The pixelmatch-driven PNG comparison + contiguous-region bbox
+  aggregation lived in `@ingcreators/annot-mcp/compare/` for
+  historical reasons (the MCP server's
+  `annot_compare_screenshots` tool was the first caller). The
+  function itself has no MCP-specific surface — it's pure
+  (`pngBytes + pngBytes → DiffResult`). Relocating it to
+  `@ingcreators/annot-annotator` lets non-MCP callers
+  (Playwright visual regression fixtures, Astro pixel drift CI,
+  custom test reporters, editor before/after preview) consume
+  it without dragging the MCP server's dep footprint.
+
+  ### `@ingcreators/annot-annotator` — new public surface
+
+  ```ts
+  import {
+    diffScreenshots,
+    aggregateDiffRegions,
+    DimensionMismatchError,
+    type DiffResult,
+    type DiffOptions,
+  } from "@ingcreators/annot-annotator";
+
+  const result = await diffScreenshots(beforePng, afterPng, { threshold: 0.1 });
+  // → { mismatchedPixels: number, regions: BBox[], width, height }
+  ```
+
+  annotator gains `pixelmatch` (~4 KB, no transitive deps) as a
+  runtime dep.
+
+  ### `@ingcreators/annot-mcp` — no public API change
+
+  The existing `compare/diff.ts` + `compare/aggregate.ts` modules
+  become one-line re-export shims forwarding from annotator. MCP's
+  internal callers (`tools/compare-screenshots.ts`) and any
+  external consumer importing from `@ingcreators/annot-mcp` keep
+  working byte-identical.
+
+  ### Compatibility
+
+  Additive on annotator's side; zero behaviour change on MCP's
+  side. Tests move with the code (annotator 71 → 81 passed; MCP
+  84 → 78 passed — same scenarios at the new home, plus a new
+  `diffScreenshots` smoke test that the MCP-side aggregate-only
+  test didn't cover).
+
+  ### Out of scope
+
+  `pixelmatch` stays as a direct MCP dep — even though MCP no
+  longer imports it from the moved code, it's a tiny package
+  and removing the explicit dep would force consumers to rely
+  on a transitive resolution through annotator, which is more
+  fragile than declaring the intent directly.
+
+- 691bec5: **Add `flattenEditablePng(pngBytes) → pngBytes`** — Phase 3j of
+  `docs/plans/living-spec-authoring-roadmap.md` (Phase 3
+  follow-up #2). The editor's editable-PNG format embeds the
+  original un-annotated capture + the annotations SVG in PNG
+  ancillary chunks for re-edit; "flatten" drops those chunks and
+  keeps just the visible (already-annotated) bytes.
+
+  ### `@ingcreators/annot-annotator` — new public surface
+
+  ```ts
+  import { flattenEditablePng } from "@ingcreators/annot-annotator";
+
+  const flat = flattenEditablePng(editablePngBytes);
+  // → flat PNG: same visible pixels, no Adobe XMP iTXt chunk,
+  //   no custom svGo chunk. `readEditablePngBytes(flat)` returns
+  //   null. File size drops significantly (the editable layer
+  //   roughly doubled the bytes).
+  ```
+
+  ### `@ingcreators/annot-core/xmp-bytes` — new public surface
+
+  The implementation lives in `@ingcreators/annot-core` as
+  `stripPngEditableLayer` — the same chunk-walking helper that
+  `writePngWithMetadata` / `writePngWithTagsOnly` already used
+  internally to clean stale metadata before re-injecting. Now
+  exported so other Tier A consumers (not just annotator) can
+  use it directly.
+
+  annotator's `flattenEditablePng` is a one-line wrapper that
+  calls `stripPngEditableLayer` under a more user-facing name.
+
+  ### Why this is metadata removal, not re-rasterization
+
+  `toEditablePng` rasterizes the SVG fragment onto the base image
+  FIRST and embeds the editable layer as ancillary PNG chunks
+  (`iTXt` carrying Adobe XMP + custom `svGo` chunk). The visible
+  bytes are already the annotated bitmap. Flattening strips the
+  ancillary chunks; the IDAT pixel data stays byte-identical.
+  No decode, no re-encode, no `@napi-rs/canvas` round-trip.
+
+  ### Use cases
+  - **Publish-flat** — editor session → distribution-ready PNG;
+    the editable layer is dead weight for downstream consumers
+    (Slack drop, third-party viewers).
+  - **File size** — editable PNG roughly doubles in bytes
+    (original + SVG embedded); flattening drops the overhead.
+  - **Privacy hardening** — `burnRedactions` is the strong
+    version for _redact_ regions; flattening drops the
+    recoverable original entirely for _all_ annotations,
+    including non-redact ones whose annotated visual the
+    publisher wants to keep but whose original capture they
+    don't want shippable.
+
+  ### Internal rename in annot-core
+
+  The private `removePngMetadata` helper in
+  `@ingcreators/annot-core/xmp-bytes` is renamed to
+  `stripPngEditableLayer` (clearer name describing what it does
+  rather than how it's used). Internal callers in the same
+  module updated. No external API change for the rename itself;
+  `writePngWithMetadata` + `writePngWithTagsOnly` keep their
+  existing signatures + behaviour.
+
+  ### Compatibility
+
+  Additive on annotator + core. No behaviour change for existing
+  callers (the only internal rename is a private helper).
+
+- 9697f27: **Export `burnRegions` as an operation-aligned alias for
+  `burnRedactions`** — Phase 3k of
+  `docs/plans/living-spec-authoring-roadmap.md`
+  (Phase 3 follow-up #2). Closes the follow-up.
+
+  `burnRedactions` is named for its first caller's intent (MCP's
+  `annot_redact_screenshot`), but the underlying primitive is a
+  `pngBytes + region[] → pngBytes` raster transform — generic
+  over the caller's purpose. The new export surfaces the
+  operation-aligned name alongside the intent-named original.
+
+  ### `@ingcreators/annot-annotator` — new public export
+
+  ```ts
+  import { burnRegions } from "@ingcreators/annot-annotator";
+
+  // Identical signature + behaviour to burnRedactions.
+  const out = await burnRegions(pngBytes, [
+    { bbox: { x: 10, y: 20, width: 100, height: 30 }, style: "mosaic" },
+  ]);
+  ```
+
+  Identity-equal to `burnRedactions` (`burnRegions === burnRedactions`
+  at the export level) — picking one name over the other is purely
+  a docs-readability choice.
+
+  ### Use cases that motivated the alias
+
+  The function isn't redact-specific — the JSDoc on `burnRedactions`
+  now enumerates:
+  - Editor-side "highlight this region with a translucent colour
+    and ship it baked" workflow.
+  - Visual-regression pre-processing — burn dynamic content
+    (timestamps, login state badges) into the screenshot so pixel
+    diffs stay deterministic.
+  - Watermark / overlay burn for downstream distribution.
+  - Privacy hardening at non-redact regions (e.g. blur a logo in
+    a publicly-shared screenshot).
+
+  For any of these, `burnRegions` reads as the natural name.
+  Redact callers stay on `burnRedactions` (still the recommended
+  name when the intent IS redaction); no migration forced.
+
+  ### `@ingcreators/annot-mcp` — no public API change
+
+  MCP's `compare/burn.ts` re-export shim + `index.ts` forward both
+  names. Existing `burnRedactions` callers see no change.
+
+  ### Compatibility
+
+  Additive. `burnRedactions` keeps its public API + JSDoc; the
+  alias is purely additive.
+
 ## 0.5.0
 
 ### Minor Changes

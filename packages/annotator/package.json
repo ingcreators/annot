@@ -1,6 +1,6 @@
 {
   "name": "@ingcreators/annot-annotator",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Headless annotator — render annotated screenshots from Node without a browser. Built on @resvg/resvg-js. Pairs with @ingcreators/annot-playwright for fail-on-test annotated reports.",
   "license": "Apache-2.0",
   "author": "ingcreators",
