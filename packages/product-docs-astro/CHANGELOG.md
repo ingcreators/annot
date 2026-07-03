@@ -1,5 +1,32 @@
 # @ingcreators/annot-product-docs-astro
 
+## 0.4.0
+
+### Minor Changes
+
+- 0179c4c: **Astro 7 support** — the `astro` peer range widens from
+  `^5.0.0 || ^6.0.0` to `^5.0.0 || ^6.0.0 || ^7.0.0`.
+
+  No code changes were required: the integration only uses the
+  stable `astro:config:setup` hook + `updateConfig({ vite })`,
+  and the Image Service (`renderAnnotatedScreen`) is a plain
+  build-time renderer with no `astro:assets` dependency, so the
+  Astro 7 breaking changes (Vite 8, Rust compiler, Sätteri
+  Markdown pipeline) don't touch this package's surface.
+
+  Astro 5 and 6 consumers are unaffected — the range is purely
+  additive. Verified against `astro@7.0.6` +
+  `@astrojs/starlight@0.41.2` via the dogfooded
+  `@ingcreators/annot-docs-site` build.
+
+### Patch Changes
+
+- Updated dependencies [b47d896]
+  - @ingcreators/annot-core@0.3.1
+  - @ingcreators/annot-annotator@0.6.0
+  - @ingcreators/annot-playwright@0.4.2
+  - @ingcreators/annot-product-docs@0.4.1
+
 ## 0.3.1
 
 ### Patch Changes
