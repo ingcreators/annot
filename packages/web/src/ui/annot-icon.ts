@@ -17,4 +17,5 @@
  */
 
 export type { AnnotIconElement } from "@ingcreators/annot-host-ui/annot-icon";
+
 import "@ingcreators/annot-host-ui/annot-icon";
