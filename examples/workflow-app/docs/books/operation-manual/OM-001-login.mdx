@@ -69,15 +69,15 @@ the menu.
 - generic [ref=e2] [box=0,0,1280,801]:
   - banner [ref=e3] [box=0,0,1280,57]:
     - generic [ref=e4] [box=160,0,960,56]:
-      - link "Workflow App" [ref=e5] [cursor=pointer] [box=176,16,105,24]:
+      - link "Workflow App" [ref=e5] [cursor=pointer] [box=176,16,107,24]:
         - /url: "#/login"
-      - generic [ref=e7] [box=904,11,200,34]:
-        - generic [ref=e8] [box=904,18,56,20]: Language
-        - group "Language" [ref=e9] [box=968,11,136,34]:
-          - button "English" [pressed] [ref=e10] [cursor=pointer] [box=969,12,61,32]
-          - button "Japanese" [ref=e11] [cursor=pointer] [box=1030,12,73,32]
+      - generic [ref=e7] [box=896,11,208,34]:
+        - generic [ref=e8] [box=896,18,58,20]: Language
+        - group "Language" [ref=e9] [box=962,11,142,34]:
+          - button "English" [pressed] [ref=e10] [cursor=pointer] [box=963,12,63,32]
+          - button "Japanese" [ref=e11] [cursor=pointer] [box=1026,12,77,32]
   - main [ref=e12] [box=0,57,1280,744]:
-    - generic [ref=e15] [box=396,81,488,562]:
+    - generic [ref=e15] [box=396,81,488,561]:
       - heading "Sign in" [level=1] [ref=e16] [box=421,106,438,42]
       - paragraph [ref=e17] [box=421,194,438,21]: Enter your registered email and password.
       - generic [ref=e18] [box=421,245,438,199]:
@@ -88,25 +88,16 @@ the menu.
           - generic [ref=e23] [box=421,325,438,20]: Password
           - textbox "Password" [ref=e24] [box=421,348,438,40]
         - button "Sign in" [ref=e25] [cursor=pointer] [box=421,404,438,40]
-      - complementary [ref=e26] [box=421,460,438,158]:
+      - complementary [ref=e26] [box=421,460,438,157]:
         - heading "Demo credentials" [level=2] [ref=e27] [box=438,477,404,21]
         - paragraph [ref=e28] [box=438,502,404,20]: Password for every demo account is "password".
         - generic [ref=e29] [box=438,530,404,43]:
-          - term [ref=e30] [box=438,530,56,20]: Applicant
-          - definition [ref=e31] [box=506,530,336,20]: yamada@example.com, suzuki@example.com
-          - term [ref=e32] [box=438,553,56,20]: Approver
-          - definition [ref=e33] [box=506,553,336,20]: tanaka@example.com
-        - paragraph [ref=e34] [box=438,581,404,21]:
-          - code [ref=e35] [box=438,584,57,15]: password
+          - term [ref=e30] [box=438,530,59,20]: Applicant
+          - definition [ref=e31] [box=509,530,333,20]: yamada@example.com, suzuki@example.com
+          - term [ref=e32] [box=438,553,59,20]: Approver
+          - definition [ref=e33] [box=509,553,333,20]: tanaka@example.com
+        - paragraph [ref=e34] [box=438,581,404,20]:
+          - code [ref=e35] [box=438,583,63,15]: password
 */}
 
-{/* annot:attributes
-textbox "Email":
-  type: email
-  required: 
-textbox "Password":
-  type: password
-  required: 
-button "Sign in":
-  type: submit
-*/}
+{/* annot:attributes */}
