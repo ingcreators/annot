@@ -85,18 +85,18 @@ to 0 by `submitDraft`.
 - generic [ref=e2] [box=0,0,1280,801]:
   - banner [ref=e3] [box=0,0,1280,57]:
     - generic [ref=e4] [box=160,0,960,56]:
-      - link "Workflow App" [ref=e5] [cursor=pointer] [box=176,16,105,24]:
+      - link "Workflow App" [ref=e5] [cursor=pointer] [box=176,16,107,24]:
         - /url: "#/menu"
-      - generic [ref=e6] [box=652,11,452,34]:
-        - generic [ref=e36] [box=652,13,153,30]:
-          - generic [ref=e37] [box=663,18,72,20]: Taro Yamada
-          - generic [ref=e38] [box=743,19,50,18]: Applicant
-        - button "Sign out" [ref=e39] [cursor=pointer] [box=817,12,76,32]
-        - generic [ref=e7] [box=904,11,200,34]:
-          - generic [ref=e8] [box=904,18,56,20]: Language
-          - group "Language" [ref=e9] [box=968,11,136,34]:
-            - button "English" [pressed] [ref=e10] [cursor=pointer] [box=969,12,61,32]
-            - button "Japanese" [ref=e11] [cursor=pointer] [box=1030,12,73,32]
+      - generic [ref=e6] [box=643,11,461,34]:
+        - generic [ref=e36] [box=643,13,156,30]:
+          - generic [ref=e37] [box=654,18,76,20]: Taro Yamada
+          - generic [ref=e38] [box=738,19,49,18]: Applicant
+        - button "Sign out" [ref=e39] [cursor=pointer] [box=810,12,74,32]
+        - generic [ref=e7] [box=896,11,208,34]:
+          - generic [ref=e8] [box=896,18,58,20]: Language
+          - group "Language" [ref=e9] [box=962,11,142,34]:
+            - button "English" [pressed] [ref=e10] [cursor=pointer] [box=963,12,63,32]
+            - button "Japanese" [ref=e11] [cursor=pointer] [box=1026,12,77,32]
   - main [ref=e12] [box=0,57,1280,744]:
     - generic [ref=e71] [box=396,81,488,539]:
       - heading "New application" [level=1] [ref=e72] [box=421,106,438,42]
@@ -104,7 +104,7 @@ to 0 by `submitDraft`.
         - generic [ref=e74] [box=421,180,438,64]:
           - generic [ref=e75] [box=421,180,438,20]:
             - text: Category
-            - generic [ref=e76] [box=483,182,55,16]: (Required)
+            - generic [ref=e76] [box=485,183,57,14]: (Required)
           - combobox "Category (Required)" [ref=e77] [box=421,204,438,40]:
             - option "Select a category" [disabled] [box=0,0,0,0]
             - option "Leave" [box=0,0,0,0]
@@ -113,20 +113,20 @@ to 0 by `submitDraft`.
         - generic [ref=e78] [box=421,260,438,117]:
           - generic [ref=e79] [box=421,260,438,20]:
             - text: Amount (JPY)
-            - generic [ref=e80] [box=509,262,55,16]: (Required)
+            - generic [ref=e80] [box=515,263,57,14]: (Required)
           - spinbutton "Amount (JPY) (Required)" [ref=e81] [box=421,283,438,40]: "8500"
           - paragraph [ref=e82] [box=421,341,438,21]: Hidden for leave applications.
         - generic [ref=e83] [box=421,392,438,147]:
           - generic [ref=e84] [box=421,392,438,20]:
             - text: Reason
-            - generic [ref=e85] [box=471,394,55,16]: (Required)
+            - generic [ref=e85] [box=476,395,57,14]: (Required)
           - textbox "Reason (Required)" [active] [ref=e86] [box=421,416,438,123]:
             - /placeholder: Describe the background and any approval context.
             - text: Team dinner with the new design hire.
         - generic [ref=e87] [box=421,555,438,40]:
-          - link "Back" [ref=e88] [cursor=pointer] [box=421,564,29,21]:
+          - link "Back" [ref=e88] [cursor=pointer] [box=421,564,31,21]:
             - /url: "#/menu"
-          - button "Review" [ref=e89] [cursor=pointer] [box=780,555,79,40]
+          - button "Review" [ref=e89] [cursor=pointer] [box=779,555,80,40]
 */}
 
 {/* annot:attributes
