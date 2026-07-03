@@ -62,24 +62,24 @@
     "prepack": "pnpm run build"
   },
   "devDependencies": {
-    "@playwright/test": "^1.50.0",
+    "@playwright/test": "^1.61.1",
     "@types/js-yaml": "^4.0.9",
     "@types/mdast": "^4.0.4",
     "@types/unist": "^3.0.3",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vite-plugin-dts": "^5.0.1"
+    "vite-plugin-dts": "^5.0.3"
   },
   "dependencies": {
     "@ingcreators/annot-annotator": "workspace:*",
     "@ingcreators/annot-core": "workspace:*",
     "@ingcreators/annot-playwright": "workspace:*",
     "js-yaml": "^4.1.1",
+    "playwright-core": "^1.61.1",
     "remark-frontmatter": "^5.0.0",
     "remark-mdx": "^3.1.1",
     "remark-parse": "^11.0.0",
     "remark-stringify": "^11.0.0",
-    "playwright-core": "^1.50.0",
     "unified": "^11.0.5",
     "unist-util-visit": "^5.0.0",
     "zod": "^4.4.3"

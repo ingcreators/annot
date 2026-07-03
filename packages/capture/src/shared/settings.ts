@@ -196,9 +196,19 @@ export const DEFAULT_SETTINGS: Settings = {
   wholePageOutput: "stitched",
 };
 
+/**
+ * Shape of an untrusted persisted-settings blob: section keys are known
+ * but every leaf stays `unknown` until the runtime checks below vet it.
+ */
+type SettingsInput = {
+  [K in keyof Settings]?: Settings[K] extends object
+    ? { [K2 in keyof Settings[K]]?: unknown }
+    : unknown;
+};
+
 /** Deep-merge partial settings onto defaults (only known keys). */
-export function mergeSettings(partial: any): Settings {
-  const p = partial || {};
+export function mergeSettings(partial: unknown): Settings {
+  const p = (partial ?? {}) as SettingsInput;
   return {
     overlays: {
       mode: (p.overlays?.mode as OverlayMode) ?? DEFAULT_SETTINGS.overlays.mode,

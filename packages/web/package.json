@@ -34,10 +34,10 @@
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",
-    "@storybook/addon-a11y": "^10.4.1",
-    "@storybook/web-components-vite": "^10.4.1",
-    "chrome-types": "^0.1.429",
-    "storybook": "^10.4.1",
+    "@storybook/addon-a11y": "^10.4.6",
+    "@storybook/web-components-vite": "^10.4.6",
+    "chrome-types": "^0.1.431",
+    "storybook": "^10.4.6",
     "typescript": "catalog:",
     "vite": "catalog:"
   }
