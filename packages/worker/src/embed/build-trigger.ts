@@ -25,7 +25,11 @@ import type { Context } from "hono";
 import { requireAuth } from "../auth-middleware.js";
 import type { Env } from "../index.js";
 import { recordAuditEvent } from "../storage-repo.js";
-import { findGitHubInstallationById, type GitHubInstallationRow } from "./github-app.js";
+import {
+  checkClaimantIsInstaller,
+  findGitHubInstallationById,
+  type GitHubInstallationRow,
+} from "./github-app.js";
 
 const MAX_ATTEMPTS = 3;
 const BACKOFF_MS = 30_000;
@@ -102,13 +106,14 @@ export async function handleEmbedInstallationPatch(
       404,
     );
   }
-  // The dashboard-UI step that pairs an installation with a
-  // specific workspace lands later (5z-2's setup wizard). For
-  // now the owner check is: the installation must be either
-  // unclaimed (workspace_id IS NULL) OR claimed by the caller's
-  // workspace. Anyone authenticated can claim an unclaimed
-  // installation by being the first to PATCH against it; the
-  // dashboard will add a proper claim flow later.
+  // Ownership gate. Two cases:
+  //   - Already claimed by another workspace → 403.
+  //   - Unclaimed (workspace_id IS NULL) → the CLAIM transition is
+  //     gated to the GitHub user who installed the App (captured
+  //     from the `installation.created` webhook `sender`). Without
+  //     this, any authenticated annot.work user could claim an
+  //     unclaimed installation and gain read / commit access to
+  //     that account's repos.
   if (installation.workspace_id !== null && installation.workspace_id !== auth.workspaceId) {
     return c.json(
       {
@@ -118,6 +123,22 @@ export async function handleEmbedInstallationPatch(
       },
       403,
     );
+  }
+  if (installation.workspace_id === null) {
+    const claimDenial = checkClaimantIsInstaller({
+      installedById: installation.installed_by_id,
+      claimantProvider: auth.session.provider,
+      claimantProviderUserId: auth.session.providerUserId,
+    });
+    if (claimDenial) {
+      const message =
+        claimDenial === "not_github_session"
+          ? "Claiming a GitHub App installation requires a GitHub-authenticated session. Sign in with GitHub, then retry."
+          : claimDenial === "installer_unknown"
+            ? `The installer of installation ${id} is not recorded (it predates installer tracking, or was seeded without a webhook). Reinstall the App so GitHub re-sends the installation event, or claim it directly in D1.`
+            : "Only the GitHub user who installed this App can claim it.";
+      return c.json({ ok: false, error: "not_authorised", message }, 403);
+    }
   }
   let body: {
     buildHookUrl?: string | null;

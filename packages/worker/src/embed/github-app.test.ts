@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import app from "../index.js";
 import { makeMockD1Sqlite, makeMockEnv } from "../test-helpers.js";
 import {
+  checkClaimantIsInstaller,
   checkInstallationWorkspaceAccess,
   findGitHubInstallationByAccount,
   findGitHubInstallationById,
@@ -74,6 +75,40 @@ describe("github_installations CRUD", () => {
     expect(found?.account_login).toBe("octocat");
   });
 
+  it("captures the installer identity from the webhook sender", async () => {
+    const db = makeMockD1Sqlite();
+    const row = await upsertGitHubInstallation(db, {
+      id: 555,
+      accountLogin: "acme",
+      accountType: "Organization",
+      installedById: 4242,
+      installedByLogin: "octo-admin",
+    });
+    expect(row.installed_by_id).toBe(4242);
+    expect(row.installed_by_login).toBe("octo-admin");
+  });
+
+  it("does not clobber a known installer with a later NULL upsert", async () => {
+    const db = makeMockD1Sqlite();
+    // Webhook seeds the installer.
+    await upsertGitHubInstallation(db, {
+      id: 556,
+      accountLogin: "acme",
+      accountType: "Organization",
+      installedById: 4242,
+      installedByLogin: "octo-admin",
+    });
+    // A later upsert without installer info (e.g. the manifest
+    // setup-callback seed racing the webhook) must not null it out.
+    const re = await upsertGitHubInstallation(db, {
+      id: 556,
+      accountLogin: "acme",
+      accountType: "Organization",
+    });
+    expect(re.installed_by_id).toBe(4242);
+    expect(re.installed_by_login).toBe("octo-admin");
+  });
+
   it("re-upsert preserves the existing workspace_id + repo_policy", async () => {
     const db = makeMockD1Sqlite();
     await upsertGitHubInstallation(db, {
@@ -137,6 +172,8 @@ describe("checkInstallationWorkspaceAccess", () => {
       default_branch_override: null,
       build_hook_url: null,
       target_paths_json: null,
+      installed_by_login: null,
+      installed_by_id: null,
     };
   }
 
@@ -150,6 +187,48 @@ describe("checkInstallationWorkspaceAccess", () => {
 
   it("denies other workspaces", () => {
     expect(checkInstallationWorkspaceAccess(row("ws-2"), "ws-1")).toBe("other_workspace");
+  });
+});
+
+describe("checkClaimantIsInstaller", () => {
+  it("grants when the GitHub session matches the recorded installer id", () => {
+    expect(
+      checkClaimantIsInstaller({
+        installedById: 12345,
+        claimantProvider: "github",
+        claimantProviderUserId: "12345",
+      }),
+    ).toBeNull();
+  });
+
+  it("denies a non-GitHub session", () => {
+    expect(
+      checkClaimantIsInstaller({
+        installedById: 12345,
+        claimantProvider: "google",
+        claimantProviderUserId: "12345",
+      }),
+    ).toBe("not_github_session");
+  });
+
+  it("denies (fails closed) when the installer is unknown", () => {
+    expect(
+      checkClaimantIsInstaller({
+        installedById: null,
+        claimantProvider: "github",
+        claimantProviderUserId: "12345",
+      }),
+    ).toBe("installer_unknown");
+  });
+
+  it("denies a different GitHub user", () => {
+    expect(
+      checkClaimantIsInstaller({
+        installedById: 99999,
+        claimantProvider: "github",
+        claimantProviderUserId: "12345",
+      }),
+    ).toBe("not_installer");
   });
 });
 

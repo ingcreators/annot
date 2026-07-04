@@ -43,9 +43,20 @@ interface InstallationPayload {
   suspended_at?: string | null;
 }
 
+/** Top-level `sender` on every webhook payload — the user who
+ *  triggered the delivery. For `installation.created` this is the
+ *  user who installed the App (GitHub only lets account owners /
+ *  org admins install), so it's the authoritative "who may claim
+ *  this installation" signal consumed by the claim gate. */
+interface WebhookSender {
+  login?: string;
+  id?: number;
+}
+
 interface InstallationEvent {
   action?: string;
   installation?: InstallationPayload;
+  sender?: WebhookSender;
 }
 
 /**
@@ -136,6 +147,10 @@ async function handleInstallationEvent(
       id: inst.id,
       accountLogin,
       accountType,
+      // Capture the installer so the claim step can verify the
+      // claimant is this same GitHub user.
+      installedByLogin: payload.sender?.login ?? null,
+      installedById: typeof payload.sender?.id === "number" ? payload.sender.id : null,
     });
     await auditInstallationEvent(c.env.DB, {
       workspaceId: row.workspace_id,

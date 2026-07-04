@@ -36,6 +36,14 @@ export interface GitHubInstallationRow {
    *  the App is authorised to commit under. NULL = no allowlist
    *  beyond the installation's repo set. */
   target_paths_json: string | null;
+  /** GitHub login of the user who installed the App (webhook
+   *  `sender.login`). NULL for rows predating installer tracking
+   *  or seeded by the unauthenticated manifest-setup callback. */
+  installed_by_login: string | null;
+  /** GitHub numeric user id of the installer (webhook `sender.id`).
+   *  The claim gate matches this against the session's
+   *  `providerUserId`; NULL fails the gate CLOSED. */
+  installed_by_id: number | null;
 }
 
 export interface InsertGitHubInstallationInput {
@@ -44,6 +52,42 @@ export interface InsertGitHubInstallationInput {
   accountType: "User" | "Organization";
   workspaceId?: string | null;
   repoPolicy?: "pr-mode" | "direct-push";
+  /** Installer's GitHub login — pass from the `installation.created`
+   *  webhook's `sender.login`. Omit when unknown (setup callback). */
+  installedByLogin?: string | null;
+  /** Installer's GitHub numeric user id — from the webhook's
+   *  `sender.id`. Omit when unknown. */
+  installedById?: number | null;
+}
+
+/** Why a claimant may not claim an unclaimed installation. `null`
+ *  means the claim is authorised. */
+export type ClaimDenial = "not_github_session" | "installer_unknown" | "not_installer";
+
+/** Gate for the CLAIM transition (workspace_id NULL → a workspace)
+ *  in `PATCH /api/embed/installations/:id`.
+ *
+ *  Only the GitHub user who installed the App may claim its
+ *  installation. Without this, any authenticated annot.work user
+ *  could claim an unclaimed installation and gain read / commit
+ *  access to that account's repos. The App lacks the org-members
+ *  permission needed to verify org membership at runtime, so the
+ *  authoritative signal is the installer identity captured from the
+ *  `installation.created` webhook `sender`.
+ *
+ *  Matches on the numeric GitHub user id (robust against username
+ *  changes). A NULL recorded installer fails CLOSED. */
+export function checkClaimantIsInstaller(opts: {
+  installedById: number | null;
+  claimantProvider: string;
+  claimantProviderUserId: string;
+}): ClaimDenial | null {
+  // A Google-authenticated session has no GitHub identity to match
+  // against a GitHub App installation.
+  if (opts.claimantProvider !== "github") return "not_github_session";
+  if (opts.installedById === null) return "installer_unknown";
+  if (String(opts.installedById) !== opts.claimantProviderUserId) return "not_installer";
+  return null;
 }
 
 /** Insert (or upsert by id, since GitHub-assigned ids never
@@ -59,13 +103,18 @@ export async function upsertGitHubInstallation(
       `INSERT INTO github_installations (
         id, account_login, account_type, workspace_id,
         installed_at, suspended_at, repo_policy,
-        default_branch_override, build_hook_url, target_paths_json
-      ) VALUES (?, ?, ?, ?, ?, NULL, ?, NULL, NULL, NULL)
+        default_branch_override, build_hook_url, target_paths_json,
+        installed_by_login, installed_by_id
+      ) VALUES (?, ?, ?, ?, ?, NULL, ?, NULL, NULL, NULL, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         account_login = excluded.account_login,
         account_type  = excluded.account_type,
         workspace_id  = COALESCE(github_installations.workspace_id, excluded.workspace_id),
-        repo_policy   = COALESCE(github_installations.repo_policy,  excluded.repo_policy)`,
+        repo_policy   = COALESCE(github_installations.repo_policy,  excluded.repo_policy),
+        -- Never clobber a known installer with a NULL from a later
+        -- upsert (e.g. the setup-callback seed racing the webhook).
+        installed_by_login = COALESCE(github_installations.installed_by_login, excluded.installed_by_login),
+        installed_by_id    = COALESCE(github_installations.installed_by_id,    excluded.installed_by_id)`,
     )
     .bind(
       input.id,
@@ -74,6 +123,8 @@ export async function upsertGitHubInstallation(
       input.workspaceId ?? null,
       now,
       input.repoPolicy ?? "pr-mode",
+      input.installedByLogin ?? null,
+      input.installedById ?? null,
     )
     .run();
 
