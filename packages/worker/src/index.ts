@@ -14,6 +14,7 @@
 //   - /api/images/:id                        (GET / PATCH / DELETE metadata)
 //   - /api/images/:id/original               (GET original bytes)
 //   - /api/images/:id/annotations            (GET + PATCH annotations SVG)
+//   - /api/images/:id/annotations-yaml       (GET + PATCH annotations-yaml sidecar)
 //   - /api/documents                         (POST upload, GET list)
 //   - /api/documents/:id                     (GET / PATCH / DELETE metadata)
 //   - /api/documents/:id/content             (GET + PATCH document bytes)
@@ -70,6 +71,8 @@ import { handleEmbedWebhook } from "./embed/webhook.js";
 import {
   handleImageAnnotationsGet,
   handleImageAnnotationsPatch,
+  handleImageAnnotationsYamlGet,
+  handleImageAnnotationsYamlPatch,
   handleImageDelete,
   handleImageGet,
   handleImageList,
@@ -305,6 +308,8 @@ app.delete("/api/images/:id", handleImageDelete);
 app.get("/api/images/:id/original", handleImageOriginalGet);
 app.get("/api/images/:id/annotations", handleImageAnnotationsGet);
 app.patch("/api/images/:id/annotations", handleImageAnnotationsPatch);
+app.get("/api/images/:id/annotations-yaml", handleImageAnnotationsYamlGet);
+app.patch("/api/images/:id/annotations-yaml", handleImageAnnotationsYamlPatch);
 
 // ─── Documents (AnnotCloudStore — .annot.html) ───────────────
 app.post("/api/documents", handleDocumentUpload);

@@ -803,6 +803,160 @@ describe("annotations round-trip", () => {
   });
 });
 
+// ─── PATCH + GET /api/images/:id/annotations-yaml ───────────────
+
+describe("annotations-yaml round-trip", () => {
+  const YAML = "version: 1\noverlays:\n  - ref: e2\n    intent: primary\n";
+
+  async function createImage(env: AuthedEnv["env"], cookie: string): Promise<string> {
+    const create = (await (
+      await app.request(
+        "/api/images?path=y.png",
+        {
+          method: "POST",
+          headers: { Cookie: cookie, "Content-Type": "image/png" },
+          body: TINY_PNG_BYTES,
+        },
+        env,
+      )
+    ).json()) as { image: { id: string } };
+    return create.image.id;
+  }
+
+  it("GET returns 404 no_annotations_yaml before any PATCH", async () => {
+    const { env, cookie } = await setupAuthed();
+    const id = await createImage(env, cookie);
+    const res = await app.request(
+      `/api/images/${id}/annotations-yaml`,
+      { headers: { Cookie: cookie } },
+      env,
+    );
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("no_annotations_yaml");
+  });
+
+  it("PATCH writes yaml to R2, GET returns it with text/yaml", async () => {
+    const { env, cookie, workspaceId } = await setupAuthed();
+    const id = await createImage(env, cookie);
+
+    const patch = await app.request(
+      `/api/images/${id}/annotations-yaml`,
+      {
+        method: "PATCH",
+        headers: { Cookie: cookie, "Content-Type": "text/yaml" },
+        body: YAML,
+      },
+      env,
+    );
+    expect(patch.status).toBe(200);
+    expect(((await patch.json()) as { ok: boolean }).ok).toBe(true);
+
+    // Bytes land at the deterministic key beside annotations.svg.
+    const key = `${workspaceId}/images/${id}/annotations.yaml`;
+    const obj = await env.OBJECTS.get(key);
+    expect(obj).not.toBeNull();
+    expect(await obj?.text()).toBe(YAML);
+
+    const get = await app.request(
+      `/api/images/${id}/annotations-yaml`,
+      { headers: { Cookie: cookie } },
+      env,
+    );
+    expect(get.status).toBe(200);
+    expect(get.headers.get("Content-Type")).toBe("text/yaml; charset=utf-8");
+    expect(await get.text()).toBe(YAML);
+  });
+
+  it("PATCH replaces existing yaml (create-or-replace)", async () => {
+    const { env, cookie } = await setupAuthed();
+    const id = await createImage(env, cookie);
+    for (const body of [YAML, "version: 1\noverlays: []\n"]) {
+      await app.request(
+        `/api/images/${id}/annotations-yaml`,
+        { method: "PATCH", headers: { Cookie: cookie, "Content-Type": "text/yaml" }, body },
+        env,
+      );
+    }
+    const get = await app.request(
+      `/api/images/${id}/annotations-yaml`,
+      { headers: { Cookie: cookie } },
+      env,
+    );
+    expect(await get.text()).toBe("version: 1\noverlays: []\n");
+  });
+
+  it("PATCH returns 404 for an unknown image id", async () => {
+    const { env, cookie } = await setupAuthed();
+    const res = await app.request(
+      "/api/images/ghost/annotations-yaml",
+      { method: "PATCH", headers: { Cookie: cookie, "Content-Type": "text/yaml" }, body: YAML },
+      env,
+    );
+    expect(res.status).toBe(404);
+  });
+
+  it("DELETE image cleans up the yaml sidecar from R2", async () => {
+    const { env, cookie, workspaceId } = await setupAuthed();
+    const id = await createImage(env, cookie);
+    await app.request(
+      `/api/images/${id}/annotations-yaml`,
+      { method: "PATCH", headers: { Cookie: cookie, "Content-Type": "text/yaml" }, body: YAML },
+      env,
+    );
+    const key = `${workspaceId}/images/${id}/annotations.yaml`;
+    expect(await env.OBJECTS.get(key)).not.toBeNull();
+
+    const del = await app.request(
+      `/api/images/${id}`,
+      { method: "DELETE", headers: { Cookie: cookie } },
+      env,
+    );
+    expect(del.status).toBe(204);
+    expect(await env.OBJECTS.get(key)).toBeNull();
+  });
+
+  it("GET is workspace-scoped: another workspace cannot read the sidecar", async () => {
+    const a = await setupAuthed();
+    const id = await createImage(a.env, a.cookie);
+    await app.request(
+      `/api/images/${id}/annotations-yaml`,
+      { method: "PATCH", headers: { Cookie: a.cookie, "Content-Type": "text/yaml" }, body: YAML },
+      a.env,
+    );
+
+    // Second workspace + session sharing the SAME D1 / KV / R2, so
+    // this mirrors single-deploy reality (cf. the cross-workspace
+    // isolation block below).
+    const otherUpserted = await findOrCreateUserFromProvider(a.env.DB, {
+      ...PROFILE,
+      providerUserId: "88888",
+    });
+    const otherToken = await createSession(a.env.SESSIONS, {
+      provider: "github",
+      providerUserId: "88888",
+      login: "other-user",
+      name: "Other",
+      avatarUrl: "",
+      createdAt: new Date().toISOString(),
+      lastSeenAt: new Date().toISOString(),
+      userId: otherUpserted.user.id,
+      workspaceId: otherUpserted.workspace.id,
+    });
+
+    // Other workspace's session + A's image id → not_found (the
+    // findImageById lookup is scoped to the caller's workspace).
+    const res = await app.request(
+      `/api/images/${id}/annotations-yaml`,
+      { headers: { Cookie: `annot_session=${otherToken}` } },
+      a.env,
+    );
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("not_found");
+  });
+});
+
 // ─── Cross-workspace isolation ──────────────────────────────────
 
 describe("cross-workspace isolation", () => {
