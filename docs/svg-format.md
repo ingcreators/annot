@@ -231,10 +231,10 @@ Readers treat missing attribute as v0 and re-stamp on save.
       `xmlns:annot="https://ingcreators.com/annot/ns/1.0/"` and
       `<annot:*>` elements instead of `data-*` attributes? More
       principled but harder for downstream tools that assume plain
-      SVG. If adopted, reuse the XMP namespace URI (already shared
-      between `packages/core/src/xmp/xmp-browser.ts` and the Rust
-      side in `src-tauri/src/commands/xmp.rs`) so SVG and XMP refer
-      to the same vocabulary — `ingcreators.com` is the stable
+      SVG. If adopted, reuse the XMP namespace URI (shared between
+      the browser-side `packages/core/src/xmp/xmp-browser.ts` and the
+      Tier-A `packages/core/src/xmp/xmp-bytes.ts`) so SVG and XMP
+      refer to the same vocabulary — `ingcreators.com` is the stable
       schema domain, `annot.work` is reserved for user-facing
       hosting / routing only.
 - [ ] `<filter>` definitions for drop-shadow / glow are inlined into

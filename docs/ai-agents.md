@@ -56,10 +56,10 @@ Wire into your MCP client. For Claude Desktop on macOS:
 }
 ```
 
-Restart the client; five `annot_*` tools appear alongside
+Restart the client; nine `annot_*` tools appear alongside
 playwright-mcp's `browser_*` tools.
 
-## The five tools at a glance
+## The nine tools at a glance
 
 | Tool | Inputs | Returns |
 |---|---|---|
@@ -138,7 +138,7 @@ renders.
 | If you want to … | Read |
 |---|---|
 | Set up Claude Desktop / Claude Code with Annot | [`packages/mcp/README.md`](../packages/mcp/README.md) — Installation |
-| Learn the full annotation DSL + tool schemas | [`packages/mcp/README.md`](../packages/mcp/README.md) — The five tools / The annotation DSL |
+| Learn the full annotation DSL + tool schemas | [`packages/mcp/README.md`](../packages/mcp/README.md) — the tool list / The annotation DSL |
 | Understand the design rationale + phase ledger | [`docs/plans/_done/agent-mcp-integration.md`](./plans/_done/agent-mcp-integration.md) |
 | See how the headless rasteriser works under the hood | [`packages/annotator/README.md`](../packages/annotator/README.md) |
 | Wire Annot into a Playwright test (not an agent) | [`packages/playwright/README.md`](../packages/playwright/README.md) |
@@ -178,7 +178,9 @@ turn.
   `playwright-core` only for locator resolution on a single
   page load; navigation / click / fill / multi-step state stay
   the upstream `@playwright/mcp`'s job.
-- **JPEG output.** All five tools emit PNG only.
+- **JPEG output.** The image-producing tools (annotate / redact /
+  compare) emit PNG only; the snapshot / docs-flow tools emit YAML /
+  MDX / Markdown / JSON.
 - **A right-click "Ask AI" inside the editor.** Sibling product
   surface, not part of this track.
 - **PPTX export from the agent (`annot_export_pptx`).** Deferred

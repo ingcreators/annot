@@ -13,9 +13,10 @@
 - The **strategic direction** is to extract that core as a headless
   library usable from Playwright / Node and integrate it tightly with
   GitHub. See [`PRODUCT_DIRECTION.md`](./PRODUCT_DIRECTION.md).
-- **Code comments are in English**; user-facing UI strings are mostly
-  English with some Japanese. Repository-wide commits / comments use
-  English.
+- **Code comments are in English**; user-facing UI strings are
+  English-only (the PWA has no i18n infrastructure — see PR #913,
+  "English-only user-facing surfaces"). Repository-wide commits /
+  comments use English.
 - The user works in Japanese. **Reply to the user in Japanese** unless
   they switch to English. Code, comments, docs, commit messages: English.
 
@@ -85,17 +86,16 @@ packages/
                 (`@xmldom/xmldom`) strips editor-internal artefacts
                 (`<style data-annot-fonts>`, legacy
                 base-image-in-wrapper, `#ui-overlay`,
-                `<g id="annotations">` wrapper). Currently `private:
-                true` in the workspace; Phase 3 of the
-                headless-annotator track flips it to a published
-                package — see
-                `docs/plans/_done/headless-annotator-publish.md`.
+                `<g id="annotations">` wrapper). Published to npm
+                (Phase 3 of the headless-annotator track flipped it
+                from `private: true` — see
+                `docs/plans/_done/headless-annotator-publish.md`).
                 Phase 0 spike landed via
                 `docs/plans/_done/headless-annotator-spike.md`;
                 Phase 1 public API via
                 `docs/plans/_done/annot-annotator-package.md`.
                 npm name: @ingcreators/annot-annotator
-                (published 2026-05-19; current 0.3.0)
+                (published 2026-05-19; current 0.6.0)
   playwright/   Playwright fixture composing `annot-annotator` into
                 idiomatic `test.extend({ annotator })` form +
                 shipping the canonical `page.screenshot({ annot:
@@ -124,7 +124,7 @@ packages/
                 See `docs/plans/_done/annot-playwright-fixture.md`
                 + `docs/plans/_done/playwright-screenshot-fixture-relayer.md`.
                 npm name: @ingcreators/annot-playwright
-                (published 2026-05-19; current 0.4.0)
+                (published 2026-05-19; current 0.4.2)
   mcp/          Model Context Protocol stdio server exposing the
                 headless annotator as agent-callable tools. Nine
                 tools at current: the five annotation /
@@ -151,7 +151,7 @@ packages/
                 `docs/plans/_done/living-product-docs.md` Phase 5
                 for the docs-flow tools.
                 npm name: @ingcreators/annot-mcp
-                (published 2026-05-20; current 0.2.0)
+                (published 2026-05-20; current 0.3.3)
   product-docs/ Living product docs core. Tier A — MDX parser
                 (`parseMdx` / `parseMdxFile` on remark + unified
                 + remark-mdx) for `.mdx` files with `annot:`
@@ -183,7 +183,7 @@ packages/
                 base design + `docs/plans/_done/playwright-screenshot-fixture-relayer.md`
                 for the MDX hook + rename.
                 npm name: @ingcreators/annot-product-docs
-                (published 2026-05-21; current 0.3.0)
+                (published 2026-05-21; current 0.4.1)
   product-docs-astro/ Astro 5.x / 6.x integration for the docs
                 core. Tier B-render — `productDocsIntegration()`
                 factory consumers drop into `astro.config.mjs`;
@@ -213,7 +213,7 @@ packages/
                 `docs/plans/_done/living-product-docs.md` Phase 2
                 + `docs/plans/_done/playwright-screenshot-fixture-relayer.md`.
                 npm name: @ingcreators/annot-product-docs-astro
-                (published 2026-05-21; current 0.3.0)
+                (published 2026-05-21; current 0.4.0)
   product-docs-xlsx/ Excel adapter for the docs core. Tier A —
                 walks MDX bundles, dispatches per `xlsx.role`
                 to the default no-template layout (cover /
@@ -237,7 +237,7 @@ packages/
                 `docs/plans/_done/living-product-docs.md`
                 Phase 3.
                 npm name: @ingcreators/annot-product-docs-xlsx
-                (published 2026-05-21; current 0.1.0)
+                (published 2026-05-21; current 0.2.3)
   marketing/    Astro 6 marketing site serving `annot.work/`.
                 Hero + features + install row + second-hero
                 MDX-snippet positioning landed in Phase 4 of
@@ -258,6 +258,44 @@ packages/
                 `tests/docs/annot-app.spec.ts`; advisory GitHub
                 Actions workflow at `.github/workflows/docs-tour.yml`).
                 npm name: @ingcreators/annot-docs-site
+  capture/      Shared capture-pipeline logic. The MAIN-world
+                `walkElementTree` (`src/content/element-tree-walker.ts`)
+                the extension host injects, plus the capture-prep
+                helpers. See "DOM metadata collection runs in MAIN
+                world" below. Private (workspace-only).
+                npm name: @ingcreators/annot-capture
+  doc/          Card / HTML-document core. `injectDocumentStyles`
+                (`src/inject-styles.ts`) + the structural-vs-themable
+                CSS split + the `Theme` registry / `@ingcreators/annot-doc/headless`
+                theme types (see guardrail §11), plus document
+                parsing (`parse.ts`). Private (workspace-only).
+                npm name: @ingcreators/annot-doc
+  embed-protocol/ Tier A embed-editor protocol. `EmbedMode` /
+                `EmbedEvent` types, `encodeEmbedRequestUrl` /
+                `parseEmbedRequestUrl`, `encodeEmbedReturnHash` /
+                `parseEmbedReturnHash`, `createEmbedHostMessenger`
+                (consumer) / `createEmbedClientMessenger` (producer)
+                — origin-validated postMessage. Shared by the
+                docs-site `<AnnotEditButton>` + the Worker's `/embed`
+                shell (living-spec Phase 5 / annot-cloud 5y).
+                npm name: @ingcreators/annot-embed-protocol
+  cloud-store/  `AnnotCloudStore` — the `StorageProvider` for Annot
+                Cloud, proxying image / document / folder reads +
+                writes to the Worker's `/api/*` endpoints (cookie
+                auth). Mounted by the PWA when signed in to
+                `annot.work`. Private (workspace-only).
+                npm name: @ingcreators/annot-cloud-store
+  worker/       Cloudflare Worker serving `annot.work/api/*` (Hono).
+                GitHub + Google OAuth, KV sessions, multi-tenant D1
+                (`users` / `workspaces` / `images` / `documents` /
+                `share_links` / `github_installations`), R2 object
+                storage, share + embed endpoints, and the GitHub App
+                embed round-trip (`src/embed/`: load / commit /
+                webhook / setup — living-spec 5y / 5z). D1 migrations
+                in `migrations/`; deploy + migration-apply run from
+                `.github/workflows/{deploy,apply-migrations}.yml`.
+                Private (workspace-only).
+                npm name: @ingcreators/annot-worker
 ```
 
 Naming convention: **`@ingcreators/annot-<role>`** for every package.
@@ -859,13 +897,17 @@ blocking** — a story that fails to compile fails the PR.
   The `litelement-stories-coverage.md` follow-up (PRs
   #253–#256) closed the gap that `lit-migration-completion.md`
   left open: every `LitElement` subclass under
-  `packages/web/src/` and `packages/host-ui/src/` ships at
-  least one co-located `*.stories.ts`. The current ratio is
-  **29/29** (every LitElement has a story; some have
-  multiple stories for multiple visible states). Adding a new
-  built-in `LitElement` requires shipping at least a `Default`
-  story in the same PR — the next audit's check is a simple
-  symmetry assertion (`stories count >= LitElement count`).
+  `packages/web/src/` and `packages/host-ui/src/` should ship
+  at least one co-located `*.stories.ts`. As of 2026-07-04 there
+  are **45 LitElement components and 46 story files**; all but
+  one have a co-located story — `host-ui/src/embed/embed-shell.ts`
+  is the lone gap (its `firstUpdated` boots a live editor against
+  `/api/embed/load`, so a Storybook story needs a stubbed
+  transport; tracked as a follow-up). Adding a new built-in
+  `LitElement` requires shipping at least a `Default` story in
+  the same PR. Note the naive `stories count >= LitElement count`
+  symmetry check passes (46 ≥ 45) yet MASKS the embed-shell gap —
+  an audit must match stories to components by path, not by count.
 - **Story authoring conventions.** Each story:
     - Lives next to the component (`foo.ts` →
       `foo.stories.ts`).
@@ -900,8 +942,8 @@ History: PRs [#236](https://github.com/ingcreators/annot/pull/236)
 (`lit-migration-completion.md`'s six phases — ratio 12/27),
 and [#253–#256](https://github.com/ingcreators/annot/pull/253)
 (`litelement-stories-coverage.md`'s four phases — ratio
-27/27 at the time, now 29/29 after the capture-settings + split-editor
-additions) shaped the current "required for all built-in"
+27/27 at the time, since grown to 45 components / 46 stories as
+UI surfaces landed) shaped the current "required for all built-in"
 stance. If broader visual-regression coverage becomes
 valuable later (e.g. when Chromatic-style review lands per
 Phase 3 of the Storybook plan), revisit this section as
