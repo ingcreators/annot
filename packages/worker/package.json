@@ -40,6 +40,8 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.9.1",
     "better-sqlite3": "^12.11.1",
+    "esbuild": "^0.28.1",
+    "miniflare": "^4.20260701.0",
     "typescript": "catalog:",
     "wrangler": "^4.105.0"
   }
