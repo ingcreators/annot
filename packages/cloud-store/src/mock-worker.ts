@@ -12,6 +12,7 @@ interface ImageRow {
   wire: ImageWire;
   originalBytes: Uint8Array;
   annotationsSvg: string | null;
+  annotationsYaml: string | null;
 }
 
 interface DocumentRow {
@@ -45,6 +46,7 @@ export interface MockWorker {
     width?: number;
     height?: number;
     annotationsSvg?: string;
+    annotationsYaml?: string;
     tags?: Record<string, string>;
   }): ImageWire;
   seedDocument(args: { path: string; bytes: string; title?: string }): DocumentWire;
@@ -246,7 +248,12 @@ export function makeMockWorker(options: MockWorkerOptions = {}): MockWorker {
           tags: {},
           hasAnnotations: false,
         });
-        images.set(wire.id, { wire, originalBytes: bytes, annotationsSvg: null });
+        images.set(wire.id, {
+          wire,
+          originalBytes: bytes,
+          annotationsSvg: null,
+          annotationsYaml: null,
+        });
         return jsonResponse(201, { ok: true, image: wire });
       }
     }
@@ -281,6 +288,32 @@ export function makeMockWorker(options: MockWorkerOptions = {}): MockWorker {
           row.wire.hasAnnotations = true;
           row.wire.updatedAt = Date.now();
           return jsonResponse(200, { ok: true, image: row.wire });
+        }
+      }
+      if (sub === "annotations-yaml") {
+        if (method === "GET") {
+          if (!row) return jsonResponse(404, { ok: false, error: "not_found" });
+          if (row.annotationsYaml === null) {
+            return jsonResponse(404, { ok: false, error: "no_annotations_yaml" });
+          }
+          return bytesResponse(
+            200,
+            new TextEncoder().encode(row.annotationsYaml),
+            "text/yaml; charset=utf-8",
+          );
+        }
+        if (method === "PATCH") {
+          if (!row) return jsonResponse(404, { ok: false, error: "not_found" });
+          // The client sends the yaml as a string body (see
+          // `setAnnotationsYaml`); tolerate an ArrayBuffer too.
+          row.annotationsYaml =
+            typeof init.body === "string"
+              ? init.body
+              : new TextDecoder().decode(
+                  new Uint8Array((init.body as ArrayBuffer) ?? new ArrayBuffer(0)),
+                );
+          row.wire.updatedAt = Date.now();
+          return jsonResponse(200, { ok: true });
         }
       }
       if (!sub) {
@@ -459,6 +492,7 @@ export function makeMockWorker(options: MockWorkerOptions = {}): MockWorker {
         wire,
         originalBytes: args.bytes,
         annotationsSvg: args.annotationsSvg ?? null,
+        annotationsYaml: args.annotationsYaml ?? null,
       });
       return wire;
     },

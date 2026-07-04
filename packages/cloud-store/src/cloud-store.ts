@@ -872,6 +872,40 @@ export class AnnotCloudStore
     }
   }
 
+  // ── Annotations YAML sidecar (living-spec Phase 4a) ─────────
+  //
+  // The sidecar is stored server-side per-image (keyed by the
+  // image's backend id), so `pngPath` is resolved to that id here
+  // rather than derived into a separate `<path>.annotations.yaml`
+  // path the way filesystem-backed stores do. The worker owns the
+  // `<pngPath>.annotations.yaml` convention on its side.
+
+  async getAnnotationsYaml(pngPath: string): Promise<string | undefined> {
+    const id = await this.#resolveImageId(pngPath);
+    // No image at that path → no sidecar. Matches the contract's
+    // "undefined when no sidecar exists".
+    if (!id) return undefined;
+    const res = await this.#api.getBody(`/api/images/${id}/annotations-yaml`, pngPath);
+    // `getBody` maps 404 → null, i.e. no sidecar written yet.
+    if (!res) return undefined;
+    return await res.text();
+  }
+
+  async setAnnotationsYaml(pngPath: string, content: string): Promise<void> {
+    const id = await this.#resolveImageId(pngPath);
+    if (!id) {
+      throw new Error(
+        `AnnotCloudStore.setAnnotationsYaml: no image at "${pngPath}" to attach a sidecar to.`,
+      );
+    }
+    await this.#api.patchBytes<{ ok: true }>(
+      `/api/images/${id}/annotations-yaml`,
+      content,
+      { "Content-Type": "text/yaml; charset=utf-8" },
+      pngPath,
+    );
+  }
+
   // ── StorageWithThumbnailCache ───────────────────────────────
 
   thumbnailKey(path: string): string | undefined {

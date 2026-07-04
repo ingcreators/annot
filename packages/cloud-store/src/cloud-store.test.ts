@@ -184,6 +184,60 @@ describe("AnnotCloudStore.getImage", () => {
   });
 });
 
+// ─── annotations YAML sidecar ───────────────────────────────────
+
+describe("AnnotCloudStore annotations-yaml sidecar", () => {
+  const YAML = "version: 1\noverlays:\n  - ref: e2\n    intent: primary\n";
+
+  it("getAnnotationsYaml returns undefined for an unknown path", async () => {
+    const { store } = await makeStoreWithMock();
+    await store.init();
+    expect(await store.getAnnotationsYaml("nope.png")).toBeUndefined();
+  });
+
+  it("getAnnotationsYaml returns undefined when the image has no sidecar", async () => {
+    const { mock, store } = await makeStoreWithMock();
+    await store.init();
+    mock.seedImage({ path: "shot.png", bytes: PNG_BYTES });
+    expect(await store.getAnnotationsYaml("shot.png")).toBeUndefined();
+  });
+
+  it("set then get round-trips the yaml", async () => {
+    const { mock, store } = await makeStoreWithMock();
+    await store.init();
+    mock.seedImage({ path: "shot.png", bytes: PNG_BYTES });
+    await store.setAnnotationsYaml("shot.png", YAML);
+    expect(await store.getAnnotationsYaml("shot.png")).toBe(YAML);
+  });
+
+  it("getAnnotationsYaml reads a seeded sidecar", async () => {
+    const { mock, store } = await makeStoreWithMock();
+    await store.init();
+    mock.seedImage({ path: "shot.png", bytes: PNG_BYTES, annotationsYaml: YAML });
+    expect(await store.getAnnotationsYaml("shot.png")).toBe(YAML);
+  });
+
+  it("setAnnotationsYaml replaces existing content", async () => {
+    const { mock, store } = await makeStoreWithMock();
+    await store.init();
+    mock.seedImage({ path: "shot.png", bytes: PNG_BYTES, annotationsYaml: YAML });
+    await store.setAnnotationsYaml("shot.png", "version: 1\noverlays: []\n");
+    expect(await store.getAnnotationsYaml("shot.png")).toBe("version: 1\noverlays: []\n");
+  });
+
+  it("setAnnotationsYaml throws when the image doesn't exist", async () => {
+    const { store } = await makeStoreWithMock();
+    await store.init();
+    await expect(store.setAnnotationsYaml("ghost.png", YAML)).rejects.toThrow(/no image/);
+  });
+
+  it("supportsAnnotationsYaml narrows the store", async () => {
+    const { store } = await makeStoreWithMock();
+    expect(typeof store.getAnnotationsYaml).toBe("function");
+    expect(typeof store.setAnnotationsYaml).toBe("function");
+  });
+});
+
 // ─── listImages ─────────────────────────────────────────────────
 
 describe("AnnotCloudStore.listImages", () => {

@@ -6,8 +6,10 @@
 //   GET    /api/images/:id                   metadata
 //   GET    /api/images/:id/original          original bytes
 //   GET    /api/images/:id/annotations       annotations SVG bytes
+//   GET    /api/images/:id/annotations-yaml  annotations-yaml sidecar
 //   PATCH  /api/images/:id                   metadata patch (JSON)
 //   PATCH  /api/images/:id/annotations       annotations SVG upload
+//   PATCH  /api/images/:id/annotations-yaml  annotations-yaml sidecar write
 //   DELETE /api/images/:id                   soft-delete + R2 cleanup
 //
 // All endpoints require an authenticated session (Phase 3
@@ -367,9 +369,14 @@ export async function handleImageDelete(c: Context<{ Bindings: Env }>): Promise<
   // delete the bytes immediately to free storage. If R2 fails
   // we log + continue — the next compaction job (Phase 5+) can
   // sweep orphaned keys.
-  const keysToDelete = [row.original_r2_key, row.annotations_r2_key, row.thumbnail_r2_key].filter(
-    (k): k is string => Boolean(k),
-  );
+  const keysToDelete = [
+    row.original_r2_key,
+    row.annotations_r2_key,
+    row.thumbnail_r2_key,
+    // Deterministic sidecar key (no D1 column tracks it); a delete
+    // of an absent key is a no-op, so include it unconditionally.
+    annotationsYamlKey(auth.workspaceId, row.id),
+  ].filter((k): k is string => Boolean(k));
   try {
     if (keysToDelete.length > 0) {
       await c.env.OBJECTS.delete(keysToDelete);
@@ -536,4 +543,117 @@ export async function handleImageAnnotationsPatch(
   });
 
   return c.json({ ok: true, image: toWire(updated) });
+}
+
+// ─── Annotations YAML sidecar (living-spec Phase 4a) ────────────
+//
+// The `.annotations.yaml` sidecar the Annot editor's Overlay tool
+// reads / writes (see `StorageWithDocuments.getAnnotationsYaml` in
+// `@ingcreators/annot-core/storage`). Stored at a DETERMINISTIC R2
+// key beside the annotations SVG. Unlike the SVG, no D1 key column
+// is tracked: the key is fully derivable from workspace + image id,
+// so R2's own presence answers "does a sidecar exist?" (GET below)
+// and the delete handler recomputes the same key for cleanup. That
+// keeps this additive — no migration, no `hasAnnotations`-style
+// flag (nothing lists "which images have a yaml sidecar").
+
+/** Deterministic R2 key for an image's annotations-yaml sidecar.
+ *  Mirrors the `…/annotations.svg` scheme. */
+export function annotationsYamlKey(workspaceId: string, imageId: string): string {
+  return `${workspaceId}/images/${imageId}/annotations.yaml`;
+}
+
+// ─── GET /api/images/:id/annotations-yaml ───────────────────────
+
+export async function handleImageAnnotationsYamlGet(
+  c: Context<{ Bindings: Env }>,
+): Promise<Response> {
+  const auth = await requireAuth(c);
+  if (auth instanceof Response) return auth;
+
+  const id = c.req.param("id");
+  if (!id) return missingIdResponse(c);
+  // Authz first: scopes the lookup to the caller's workspace, so a
+  // caller can never read another tenant's sidecar by guessing ids.
+  const row = await findImageById(c.env.DB, auth.workspaceId, id);
+  if (!row) {
+    return c.json({ ok: false, error: "not_found", message: "Image not found." }, 404);
+  }
+  const obj = await c.env.OBJECTS.get(annotationsYamlKey(auth.workspaceId, row.id));
+  if (!obj) {
+    return c.json(
+      {
+        ok: false,
+        error: "no_annotations_yaml",
+        message: "Image has no annotations yaml sidecar yet.",
+      },
+      404,
+    );
+  }
+  return new Response(obj.body, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/yaml; charset=utf-8",
+      "Cache-Control": "private, max-age=60",
+    },
+  });
+}
+
+// ─── PATCH /api/images/:id/annotations-yaml ─────────────────────
+
+export async function handleImageAnnotationsYamlPatch(
+  c: Context<{ Bindings: Env }>,
+): Promise<Response> {
+  const auth = await requireAuth(c);
+  if (auth instanceof Response) return auth;
+
+  const id = c.req.param("id");
+  if (!id) return missingIdResponse(c);
+  const row = await findImageById(c.env.DB, auth.workspaceId, id);
+  if (!row) {
+    return c.json({ ok: false, error: "not_found", message: "Image not found." }, 404);
+  }
+
+  const sizeError = validateUploadSize(c.req.header("Content-Length") ?? null);
+  if (sizeError) {
+    return c.json({ ok: false, error: "payload_too_large", message: sizeError }, 413);
+  }
+
+  // Empty is a legitimate sidecar body (a yaml with no annotations);
+  // the store contract is "create or replace with `content`", so we
+  // don't reject empty the way the SVG path does.
+  const text = await c.req.text();
+  const byteLength = new TextEncoder().encode(text).byteLength;
+  if (sizeError === null && c.req.header("Content-Length") === null) {
+    const postCheck = validateUploadSize(String(byteLength));
+    if (postCheck) {
+      return c.json({ ok: false, error: "payload_too_large", message: postCheck }, 413);
+    }
+  }
+
+  try {
+    await c.env.OBJECTS.put(annotationsYamlKey(auth.workspaceId, row.id), text, {
+      httpMetadata: { contentType: "text/yaml; charset=utf-8" },
+    });
+  } catch (err) {
+    return c.json(
+      {
+        ok: false,
+        error: "r2_error",
+        message: err instanceof Error ? err.message : "R2 upload failed.",
+      },
+      500,
+    );
+  }
+
+  await recordAuditEvent(c.env.DB, {
+    workspaceId: auth.workspaceId,
+    userId: auth.userId,
+    action: "image.annotations_yaml.patch",
+    resourceType: "image",
+    resourceId: id,
+    metadata: { sizeBytes: byteLength },
+  });
+
+  return c.json({ ok: true });
 }
