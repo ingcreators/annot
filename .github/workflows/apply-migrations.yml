@@ -1,0 +1,98 @@
+name: Apply D1 migrations
+
+# Manual (workflow_dispatch only) application of pending D1
+# migrations to the REMOTE `annot-db`.
+#
+# Companion to `deploy.yml`, whose drift gate BLOCKS a deploy when
+# local `packages/worker/migrations/*.sql` files aren't recorded in
+# the remote `d1_migrations` table. Applying migrations previously
+# required the operator to hold Cloudflare credentials locally,
+# which is awkward in dev containers / WSL where `wrangler login`'s
+# `localhost:8976` OAuth callback isn't reachable. This workflow
+# applies them using the same `CLOUDFLARE_API_TOKEN` secret the
+# deploy already uses (scoped with Account → D1:Edit) — no local
+# Cloudflare auth needed.
+#
+# Deliberately manual, same stance as `deploy.yml`: a bad SQL change
+# can brick production, so application is NEVER automatic on push.
+# This workflow relocates the manual step from "local CLI" to
+# "Actions button"; it does not make migration application
+# automatic.
+#
+# Usage:
+#   Actions → "Apply D1 migrations" → Run workflow.
+#     - dry_run = true  (default): LIST pending migrations only.
+#     - dry_run = false          : list, then APPLY to remote annot-db.
+#
+# Safe to re-run: `wrangler d1 migrations apply` only applies
+# migrations not already recorded in `d1_migrations` (idempotent).
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "List pending migrations only. Uncheck to APPLY to the remote annot-db."
+        type: boolean
+        default: true
+
+# Serialise apply runs with each other so two dispatches can't race.
+# A separate group from `deploy` (deliberately NOT shared): deploy's
+# `cancel-in-progress: true` must never cancel a migration mid-apply,
+# and the deploy drift gate only READS `migrations list`, so a
+# concurrent deploy is harmless (it either sees pending → blocks, or
+# sees applied → proceeds).
+concurrency:
+  group: d1-migrations
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  apply-migrations:
+    name: apply D1 migrations (annot-db)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Always list first so the run log records exactly what state
+      # the remote DB is in (and, on an apply run, what's about to
+      # be applied). Mirrors the drift-gate invocation in deploy.yml.
+      - name: List remote migration state
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          cd packages/worker
+          pnpm exec wrangler d1 migrations list annot-db --remote
+
+      - name: Apply pending migrations
+        if: ${{ inputs.dry_run == false }}
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm --filter @ingcreators/annot-worker migrations:apply
+
+      - name: Dry-run notice
+        if: ${{ inputs.dry_run != false }}
+        run: |
+          {
+            echo "::notice::dry_run=true — listed the remote migration state only; nothing was applied."
+            echo "::notice::Re-run this workflow with the dry_run checkbox UNCHECKED to apply pending migrations."
+          } 1>&2
