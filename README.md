@@ -15,31 +15,35 @@ sign-off, vendor selection — this section points at the artefacts you
 need without making you read the rest of the repo first.
 
 **What it is.** A monorepo housing the editor core
-(`@ingcreators/annot-core`) plus three first-party hosts (web PWA,
-Chrome extension, Electron desktop). Annotations are persisted as SVG;
-storage backends are pluggable (browser IDB, local filesystem, Google
-Drive, GitHub). Every host shares the same editor and the same SVG
-format, so an annotation captured in the extension opens identically
-in the desktop app.
+(`@ingcreators/annot-core`) plus four first-party hosts (web PWA,
+Chrome extension, Electron desktop, VSCode extension). Annotations are
+persisted as SVG; storage backends are pluggable (browser IDB, local
+filesystem, Google Drive, GitHub, and the hosted Annot Cloud). Every
+host shares the same editor and the same SVG format, so an annotation
+captured in the extension opens identically in the desktop app. The
+core additionally ships as headless npm packages (`annot-annotator` /
+`annot-playwright` / `annot-mcp`) and a living-product-docs pipeline
+(`annot-product-docs` + `-astro` + `-xlsx`).
 
 **Who it targets.** Individuals and small teams that want to annotate
 screenshots without sending them to a third-party SaaS. The codebase
-is OSS (Apache-2.0); a separate private `annot-cloud` repo will host
-optional team / billing / PR-automation features when those land — see
+is OSS (Apache-2.0). The hosted product `annot.work` runs from this
+repo (`packages/worker` + `packages/cloud-store`); only paid
+billing / SSO connectors live in a separate private `annot-cloud`
+repo — see
 [`docs/plans/oss-cloud-split.md`](./docs/plans/oss-cloud-split.md) for
 the long-form rationale and the guardrails that already apply.
 
-**Engineering posture (snapshot, 2026-04-27).**
+**Engineering posture (snapshot, 2026-07-04).**
 
 | Signal | Value |
 |--------|-------|
-| Test suite | 250 tests (Vitest), green on every PR via the `typecheck + build` workflow |
-| Lint | Biome 2, 0 findings; CI blocks on this |
+| Test suite | 286 test files, ~4,180 Vitest cases, green on every PR via the `typecheck + build` workflow |
+| Lint | Biome 2; CI blocks on errors (a small number of non-blocking warnings are tracked for cleanup) |
 | TypeScript | strict + `override` + `noFallthroughCasesInSwitch` + `noUncheckedIndexedAccess`, every package |
 | Public API | two stable entry points: `@ingcreators/annot-core` (full) and `/headless` (DOM-free) |
-| Dependency hygiene | Dependabot (npm + cargo + github-actions) + `pnpm audit --audit-level=high` on every PR |
-| Verified WASM build | `packages/imagequant/` — Rust + wasm-bindgen wrapper built in-tree, committed `.wasm` re-verified against a fresh build on every PR (`verify-wasm` CI job) |
-| Documentation | `PRODUCT_DIRECTION.md` (strategy), per-feature `docs/plans/*` design docs, `CHANGELOG.md` (every PR landed) |
+| Dependency hygiene | Dependabot (npm + github-actions) + `pnpm audit --audit-level=high` on every PR |
+| Documentation | `PRODUCT_DIRECTION.md` (strategy), per-feature `docs/plans/*` design docs, `CLAUDE.md` (operational guide) |
 
 **Documents an auditor will want.**
 
@@ -53,9 +57,11 @@ the long-form rationale and the guardrails that already apply.
   conventions, quality gates, and the architectural guardrails new
   contributions must respect.
 - [`CODE_OF_CONDUCT.md`](./CODE_OF_CONDUCT.md) — Contributor Covenant 2.1.
-- [`CHANGELOG.md`](./CHANGELOG.md) — every PR landed on `main` since
-  the project's first commit, grouped by date. The audit trail without
-  forcing a release-train process.
+- [`CHANGELOG.md`](./CHANGELOG.md) — a date-grouped log of landed PRs.
+  Note: hand-maintained entries currently trail `main` (they stop
+  around PR #98); the authoritative running history is the squash-merge
+  `git log` / the GitHub PR list until a changeset-driven changelog is
+  wired up.
 - [`docs/plans/_done/`](./docs/plans/_done/) — design docs for landed
   work (Lit migration, app decomposition, plugin API MVP, Storybook
   introduction, plugin-storage / sidebar-tabs / UI-slots — full list
@@ -80,12 +86,21 @@ omissions.
 | [`packages/annotator`](./packages/annotator) | `@ingcreators/annot-annotator` | Headless annotator — Node-side `createAnnotator({ toPng, toSvg })`. |
 | [`packages/playwright`](./packages/playwright) | `@ingcreators/annot-playwright` | Playwright fixture composing the headless annotator. |
 | [`packages/mcp`](./packages/mcp) | `@ingcreators/annot-mcp` | MCP server exposing the annotator + docs tools to AI agents. |
-| [`packages/product-docs`](./packages/product-docs) | `@ingcreators/annot-product-docs` | Living product docs core — MDX parser + match resolver + `screen` fixture + `annot-docs` CLI. |
+| [`packages/product-docs`](./packages/product-docs) | `@ingcreators/annot-product-docs` | Living product docs core — MDX parser + match resolver + `productDocs` Playwright fixture + `annot-docs` CLI. |
 | [`packages/product-docs-astro`](./packages/product-docs-astro) | `@ingcreators/annot-product-docs-astro` | Astro integration + Image Service + 7 docs components. |
 | [`packages/product-docs-xlsx`](./packages/product-docs-xlsx) | `@ingcreators/annot-product-docs-xlsx` | Excel adapter — template + placeholder + named ranges + `annot-docs-xlsx` CLI. |
+| [`packages/editor`](./packages/editor) | `@ingcreators/annot-editor` | Tier C live-browser primitives — CanvasManager, SelectionManager, History, PropertyPanel, ToolBase + tools. |
+| [`packages/render`](./packages/render) | `@ingcreators/annot-render` | Tier C-render — `renderImageRecord` + the shared OOXML DrawingML builder. |
+| [`packages/host-ui`](./packages/host-ui) | `@ingcreators/annot-host-ui` | Host-neutral editor surface — `EditorShell`, toolbar, drawer, right-panel, the `<annot-*>` Lit components. |
+| [`packages/doc`](./packages/doc) | `@ingcreators/annot-doc` | Card / HTML-document core — `injectDocumentStyles` + the theme registry. |
+| [`packages/capture`](./packages/capture) | `@ingcreators/annot-capture` | Shared capture-pipeline logic — the MAIN-world `walkElementTree` the extension host injects. |
 | [`packages/web`](./packages/web) | `@ingcreators/annot-web` | PWA host. Routing, storage implementations, right panel. |
 | [`packages/extension`](./packages/extension) | `@ingcreators/annot-extension` | Chrome MV3 extension. Capture pipeline + content-script DOM metadata. |
 | [`packages/desktop`](./packages/desktop) | `@ingcreators/annot-desktop` | Electron desktop wrapper. |
+| [`packages/vscode`](./packages/vscode) | `@ingcreators/annot-vscode` | VSCode extension host — custom editor for `*.annot.{svg,png,jpeg,jpg}` files. |
+| [`packages/worker`](./packages/worker) | `@ingcreators/annot-worker` | Cloudflare Worker serving `annot.work/api/*` — OAuth, D1, R2, share/embed endpoints. |
+| [`packages/cloud-store`](./packages/cloud-store) | `@ingcreators/annot-cloud-store` | `AnnotCloudStore` — the `StorageProvider` for the hosted `annot.work` backend. |
+| [`packages/embed-protocol`](./packages/embed-protocol) | `@ingcreators/annot-embed-protocol` | Tier A embed-editor protocol — request-URL codec + origin-validated postMessage messengers. |
 | [`packages/marketing`](./packages/marketing) | `@ingcreators/annot-marketing` | Astro 6 marketing site at `annot.work/`. |
 | [`packages/docs-site`](./packages/docs-site) | `@ingcreators/annot-docs-site` | Astro Starlight docs site at `annot.work/docs/*`. Dogfoods `@ingcreators/annot-product-docs-astro` for the `/docs/app/` page (Playwright tour against `annot.work/app/`). |
 
