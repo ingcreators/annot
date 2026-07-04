@@ -49,10 +49,5 @@
     "turbo": "^2.10.0",
     "vitest": "^4.1.9",
     "wrangler": "^4.105.0"
-  },
-  "pnpm": {
-    "overrides": {
-      "serialize-javascript@<7.0.3": ">=7.0.3"
-    }
   }
 }
