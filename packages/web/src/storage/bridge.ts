@@ -191,7 +191,7 @@ async function detectExtension(): Promise<boolean> {
   for (const id of ids) {
     try {
       logger.debug(`[bridge] Pinging extension ${id}...`);
-      const resp = await sendToExtension(id, { action: "ping" });
+      const resp = await sendToExtension<{ ok?: boolean }>(id, { action: "ping" });
       logger.debug("[bridge] Ping response:", resp);
       if (resp?.ok) {
         registry.extensionId = id;
@@ -228,18 +228,23 @@ function getExtensionIds(): string[] {
  * `chrome.runtime.sendMessage` overload signature, which the Chrome
  * types package still pins to `message: any`.
  */
-function sendToExtension(id: string, msg: any): Promise<any> {
+function sendToExtension<T = unknown>(id: string, msg: unknown): Promise<T> {
   return new Promise((resolve, reject) => {
     if (!hasChromeRuntime()) {
       reject(new Error("Chrome runtime not available"));
       return;
     }
     try {
-      chrome.runtime.sendMessage(id, msg, (response: any) => {
+      // Explicit `undefined` options arg selects the 4-param overload
+      // so `msg: unknown` doesn't get mis-matched into chrome's
+      // `options` slot (its message param is typed `any`).
+      chrome.runtime.sendMessage(id, msg, undefined, (response: unknown) => {
         if (chrome.runtime.lastError) {
           reject(new Error(chrome.runtime.lastError.message));
         } else {
-          resolve(response);
+          // The extension replies with the shape the caller declared via
+          // its Promise<T> return; the wire itself is untyped.
+          resolve(response as T);
         }
       });
     } catch (e) {
@@ -248,9 +253,9 @@ function sendToExtension(id: string, msg: any): Promise<any> {
   });
 }
 
-async function send(msg: any): Promise<any> {
+async function send<T = unknown>(msg: unknown): Promise<T> {
   if (registry.extensionId) {
-    return sendToExtension(registry.extensionId, msg);
+    return sendToExtension<T>(registry.extensionId, msg);
   }
   throw new Error("Extension not connected");
 }

@@ -234,7 +234,13 @@
        * "variant indicator / hover affordance" semantics still
        * read — only the glyph itself gets neutralised so it
        * actually has contrast to read on the dim button-bg. */
+      /* biome-ignore lint/style/noDescendingSpecificity: the leading
+         `html ` is a deliberate specificity bump so this a11y contrast
+         override wins over the base `.tool-btn-badge*` glyph colour;
+         lowering it would regress the documented WCAG fix above. */
       html .tool-btn-badge,
+      /* biome-ignore lint/style/noDescendingSpecificity: same deliberate
+         `html ` specificity bump as above, per-selector suppression. */
       html .tool-btn-badge-svg > svg,
       html .tool-flyout-chip:hover:not(.active),
       html .tool-flyout-chip-svg:hover:not(.active),

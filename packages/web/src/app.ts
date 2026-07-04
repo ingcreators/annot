@@ -490,8 +490,9 @@ export class App {
     });
 
     // Listen for Extension capture events (editPath delivered via detail)
-    window.addEventListener("annot-capture", async (e: any) => {
-      const { editPath, extId } = e.detail || {};
+    window.addEventListener("annot-capture", async (e: Event) => {
+      const { editPath, extId } =
+        (e as CustomEvent<{ editPath?: string; extId?: string }>).detail || {};
       if (!editPath) return;
 
       // Remember the user's selected mode; setExtensionId may switch it to "extension"
@@ -981,7 +982,7 @@ export class App {
           continue;
         }
         const full = await storage.getImage(img.path);
-        if (full && full.originalDataUrl) {
+        if (full?.originalDataUrl) {
           hydratedImages.push(full);
         } else {
           // Defensive: a record that can't be hydrated would

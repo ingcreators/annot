@@ -1212,7 +1212,7 @@ export class SelectionManager {
       elOutline.setAttribute("stroke-opacity", "0.7");
       elOutline.style.pointerEvents = "none";
       this.#canvas.uiOverlay.appendChild(elOutline);
-      this.#handles.push(elOutline as any);
+      this.#handles.push(elOutline as unknown as SVGRectElement);
     }
     if (!Number.isFinite(minX)) return;
 
@@ -1230,7 +1230,7 @@ export class SelectionManager {
     outline.setAttribute("stroke-dasharray", `${sw * 4}`);
     outline.style.pointerEvents = "none";
     this.#canvas.uiOverlay.appendChild(outline);
-    this.#handles.push(outline as any);
+    this.#handles.push(outline as unknown as SVGRectElement);
 
     this.#drawBBoxHandles(new DOMRect(minX, minY, maxX - minX, maxY - minY));
   }

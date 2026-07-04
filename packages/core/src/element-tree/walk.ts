@@ -15,6 +15,11 @@ import type { ElementNode, ElementTree } from "./types.js";
 export type ElementTreeVisitor = (
   node: ElementNode,
   parents: readonly ElementNode[],
+  // The `void` arm is load-bearing: side-effect-only visitors (e.g.
+  // findByMatch below) return nothing, while stop-early visitors return
+  // `false`. Narrowing to `boolean | undefined` breaks assignability of a
+  // no-return arrow.
+  // biome-ignore lint/suspicious/noConfusingVoidType: intentional — see above
 ) => boolean | void;
 
 /**

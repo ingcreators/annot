@@ -1103,6 +1103,10 @@ async function performAutoCapture(opts: { kind: "observer" | "probe" | "manual" 
 
 // ---- External-message API (for annotating.work / noting.work) ─────
 
+// `msg` is arbitrary JSON off the `runtime.sendMessage` wire (validated by
+// the `msg.action` switch below) and the reply shape is per-action;
+// `unknown` would force casts through the whole dispatch without safety.
+// biome-ignore lint/suspicious/noExplicitAny: untyped wire boundary — see above
 async function handleExternalMessage(msg: any): Promise<any> {
   switch (msg.action) {
     // Images (path-based)
@@ -1153,7 +1157,9 @@ async function handleExternalMessage(msg: any): Promise<any> {
 // ---- Listener registrations ──────────────────────────────────────
 
 // chrome.runtime listener payloads are untyped on the wire — every
-// concrete handler narrows by `msg.type` below.
+// concrete handler narrows by `msg.type` below. This matches chrome's own
+// `(message: any, …)` listener signature.
+// biome-ignore lint/suspicious/noExplicitAny: untyped chrome listener — see above
 chrome.runtime.onMessage.addListener((msg: any, sender, sendResponse) => {
   switch (msg.type) {
     case "visible-area":
@@ -1333,8 +1339,10 @@ chrome.commands.onCommand.addListener((command, tab) => {
 });
 
 chrome.runtime.onMessageExternal.addListener(
-  // External callers post arbitrary JSON over `runtime.sendMessage`;
-  // the dispatch below validates `msg.action` before doing anything.
+  // External callers post arbitrary JSON over `runtime.sendMessage`; the
+  // dispatch below validates `msg.action` before doing anything. Matches
+  // chrome's own `(message: any, …, sendResponse: (response: any) => …)`.
+  // biome-ignore lint/suspicious/noExplicitAny: arbitrary external JSON — see above
   (msg: any, _sender, sendResponse: (response: any) => void) => {
     if (!msg || typeof msg.action !== "string") {
       sendResponse({ error: "Invalid message" });

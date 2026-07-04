@@ -176,6 +176,6 @@ export function galleryUrl(folderPath?: string): string {
 }
 
 /** Navigate without page reload. */
-export function pushRoute(url: string, state?: any): void {
+export function pushRoute(url: string, state?: unknown): void {
   window.history.pushState(state || {}, "", url);
 }

@@ -31,7 +31,7 @@ const ctx = self as unknown as DedicatedWorkerGlobalScope;
 
 ctx.addEventListener("message", async (e: MessageEvent<EncodeRequest>) => {
   const req = e.data;
-  if (!req || req.type !== "encode") return;
+  if (req?.type !== "encode") return;
   try {
     const result = await encodeCapture(req.pngDataUrl, req.options);
     const reply: EncodeResponse = { type: "result", id: req.id, result };

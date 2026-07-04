@@ -163,7 +163,7 @@ export class AnnotSnapshotOverlayElement extends LitElement {
     const ref = rect?.dataset.ref;
     if (!ref || !this.elementTree) return;
     const node = findByRef(this.elementTree, ref);
-    if (!node || !node.bbox) return;
+    if (!node?.bbox) return;
     const detail: OverlayRegionPickDetail = {
       ref: node.ref,
       role: node.role,
