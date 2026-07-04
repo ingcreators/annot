@@ -897,17 +897,18 @@ blocking** — a story that fails to compile fails the PR.
   The `litelement-stories-coverage.md` follow-up (PRs
   #253–#256) closed the gap that `lit-migration-completion.md`
   left open: every `LitElement` subclass under
-  `packages/web/src/` and `packages/host-ui/src/` should ship
-  at least one co-located `*.stories.ts`. As of 2026-07-04 there
-  are **45 LitElement components and 46 story files**; all but
-  one have a co-located story — `host-ui/src/embed/embed-shell.ts`
-  is the lone gap (its `firstUpdated` boots a live editor against
-  `/api/embed/load`, so a Storybook story needs a stubbed
-  transport; tracked as a follow-up). Adding a new built-in
-  `LitElement` requires shipping at least a `Default` story in
-  the same PR. Note the naive `stories count >= LitElement count`
-  symmetry check passes (46 ≥ 45) yet MASKS the embed-shell gap —
-  an audit must match stories to components by path, not by count.
+  `packages/web/src/` and `packages/host-ui/src/` ships at least
+  one co-located `*.stories.ts`. As of 2026-07-04 there are **45
+  LitElement components and 47 story files**, and every component
+  has a co-located story (the last gap, `embed/embed-shell.ts`,
+  was closed — its stories reproduce the loading + error states
+  the visitor sees, since a successful mount needs a live
+  `/api/embed/load` backend + real editor canvas). Adding a new
+  built-in `LitElement` requires shipping at least a `Default`
+  story in the same PR. Audit by matching stories to components
+  **by path**, not by count — a `stories >= components` check
+  passes even when a specific component is missing its story
+  (some components ship multiple stories, padding the total).
 - **Story authoring conventions.** Each story:
     - Lives next to the component (`foo.ts` →
       `foo.stories.ts`).
