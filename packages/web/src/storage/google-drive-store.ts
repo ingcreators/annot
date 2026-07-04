@@ -60,6 +60,22 @@ const DOC_APP_PROP = {
 };
 const DOC_EXTENSION = ".annot.html";
 
+/**
+ * Subset of the Drive v3 `files.list` resource this store reads. Only
+ * the fields requested in `#listDrive`'s `fields` mask are populated;
+ * everything past `id` / `name` is optional because Drive omits empty
+ * values.
+ */
+interface DriveApiFile {
+  id: string;
+  name: string;
+  mimeType?: string;
+  createdTime?: string;
+  modifiedTime?: string;
+  imageMediaMetadata?: { width?: number; height?: number };
+  parents?: string[];
+}
+
 export class GoogleDriveStore
   implements
     StorageProvider,
@@ -337,7 +353,7 @@ export class GoogleDriveStore
   async #listDrive(
     query: string,
     fields = "files(id,name,mimeType,createdTime,modifiedTime,imageMediaMetadata,parents)",
-  ): Promise<any[]> {
+  ): Promise<DriveApiFile[]> {
     const q = encodeURIComponent(query);
     const f = encodeURIComponent(fields);
     const resp = await this.#fetch(
@@ -522,7 +538,7 @@ export class GoogleDriveStore
     this.#loadedFolders.add(folderPath);
   }
 
-  #fileMeta = new Map<string, any>();
+  #fileMeta = new Map<string, DriveApiFile>();
 
   /**
    * Per-path `ImageRecord` cache. Crucial for edit-loop
@@ -673,7 +689,7 @@ export class GoogleDriveStore
     for (const [path] of this.#pathToFileId) {
       if (getParentPath(path) !== folderPath) continue;
       const driveId = this.#pathToFileId.get(path)!;
-      const m = this.#fileMeta.get(driveId) || {};
+      const m: Partial<DriveApiFile> = this.#fileMeta.get(driveId) ?? {};
       // Thumbnail bytes are owned by the unified
       // `ThumbnailManager`. The gallery calls `tm.attach` after
       // this returns and fills `thumbnailDataUrl` from the cache
@@ -1130,7 +1146,7 @@ export class GoogleDriveStore
       "files(id,name,createdTime)",
     );
     this.#registerFolderChildren(parentPath, children);
-    const results: FolderRecord[] = children.map((f: any) => {
+    const results: FolderRecord[] = children.map((f: DriveApiFile) => {
       const path = this.#folderIdToPath.get(f.id)!;
       return {
         path,

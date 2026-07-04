@@ -116,7 +116,7 @@ function extractFrontmatter(
   filePath: string | undefined,
 ): AnnotFrontmatter | null {
   const fmNode = tree.children.find((c) => c.type === "yaml");
-  if (!fmNode || !fmNode.value) return null;
+  if (!fmNode?.value) return null;
 
   const parsed = yaml.load(fmNode.value) as Record<string, unknown> | null;
   if (!parsed || typeof parsed !== "object") return null;
@@ -140,7 +140,7 @@ function formatZodError(error: {
   issues: ReadonlyArray<{ path: ReadonlyArray<PropertyKey>; message: string }>;
 }): string {
   return error.issues
-    .map((i) => `  - ${i.path.length ? i.path.map(String).join(".") + ": " : ""}${i.message}`)
+    .map((i) => `  - ${i.path.length ? `${i.path.map(String).join(".")}: ` : ""}${i.message}`)
     .join("\n");
 }
 

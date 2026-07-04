@@ -2122,7 +2122,7 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
     // we can apply its saved `viewport` as the initial display
     // state.
     const block = this.document?.blocks.find((b) => b.kind === "step" && b.id === blockId);
-    if (!block || block.kind !== "step") return;
+    if (block?.kind !== "step") return;
     const initial = block.viewport
       ? { x: block.viewport.x, y: block.viewport.y, w: block.viewport.w, h: block.viewport.h }
       : undefined;
@@ -3261,7 +3261,7 @@ ${unsafeHTML(`${docCss}\n${SHELL_CSS}`)}
    *  namespace through later. */
   #handleMetadataChanged(e: Event): void {
     const detail = (e as CustomEvent<MetadataChangedDetail>).detail;
-    if (!detail || detail.kind !== "path") return;
+    if (detail?.kind !== "path") return;
     const doc = this.document;
     if (!doc) return;
     // Quick scan for matching linked blocks; bail when none.

@@ -292,7 +292,7 @@ export class MockDirectoryHandle implements FileSystemDirectoryHandle {
   }
 
   keys(): FileSystemDirectoryHandleAsyncIterator<string> {
-    return this.#makeAsyncIterator<string>(
+    return this.#makeAsyncIterator(
       () => this.#entries.keys(),
       (k) => k,
     );
@@ -313,9 +313,9 @@ export class MockDirectoryHandle implements FileSystemDirectoryHandle {
     return this.entries();
   }
 
-  #makeAsyncIterator<T>(
-    source: () => IterableIterator<unknown>,
-    map: (item: any) => T,
+  #makeAsyncIterator<I, T>(
+    source: () => IterableIterator<I>,
+    map: (item: I) => T,
   ): FileSystemDirectoryHandleAsyncIterator<T> {
     const iter = source();
     // Bag shape matches the global FileSystemDirectoryHandleAsyncIterator

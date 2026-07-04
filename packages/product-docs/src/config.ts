@@ -89,7 +89,7 @@ export function defineConfig(config: AnnotDocsConfig): AnnotDocsConfig {
   const result = annotDocsConfigSchema.safeParse(config);
   if (!result.success) {
     const issues = result.error.issues
-      .map((i) => `  - ${i.path.length ? i.path.join(".") + ": " : ""}${i.message}`)
+      .map((i) => `  - ${i.path.length ? `${i.path.join(".")}: ` : ""}${i.message}`)
       .join("\n");
     throw new Error(`Invalid \`annot-docs.config.ts\`:\n${issues}`);
   }

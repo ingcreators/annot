@@ -192,10 +192,9 @@ export async function renderAnnotatedScreen(
   // The cache key already includes the annotations-yaml source
   // (Phase 2b), so editing a yaml `style: mosaic` value busts
   // the cached PNG without additional bookkeeping.
-  const rasterRedacts =
-    annotationsFile && annotationsFile.file.annotations
-      ? buildRasterRedactRegionsFromYaml(annotationsFile.file.annotations, bboxes)
-      : [];
+  const rasterRedacts = annotationsFile?.file.annotations
+    ? buildRasterRedactRegionsFromYaml(annotationsFile.file.annotations, bboxes)
+    : [];
   const baseBytes =
     rasterRedacts.length > 0
       ? await burnRedactions(originalBaseBytes, rasterRedacts)
@@ -225,10 +224,9 @@ export async function renderAnnotatedScreen(
 
   // Phase 3c: shape annotations (the full visual palette) come
   // from yaml only, and are composed on top of the badges.
-  const shapes: BboxAnnotation[] =
-    annotationsFile && annotationsFile.file.annotations
-      ? buildShapeAnnotationsFromYaml(annotationsFile.file.annotations, bboxes, dims)
-      : [];
+  const shapes: BboxAnnotation[] = annotationsFile?.file.annotations
+    ? buildShapeAnnotationsFromYaml(annotationsFile.file.annotations, bboxes, dims)
+    : [];
 
   // Combine in z-order: shapes underneath, badges on top so the
   // numbered callouts stay legible when a shape (rect / focusMask

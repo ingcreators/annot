@@ -23,7 +23,7 @@
 // serializer. No DOM, no Playwright runtime.
 
 import { mkdir, writeFile } from "node:fs/promises";
-import { basename, dirname, isAbsolute, posix, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, relative, resolve } from "node:path";
 
 import {
   ANNOTATIONS_YAML_VERSION,

@@ -57,7 +57,7 @@ export function parseDocument(html: string, opts?: ParseOptions): AnnotDocument 
   const dom = new Parser().parseFromString(html, "text/html");
 
   const root = dom.documentElement;
-  if (!root || root.tagName.toLowerCase() !== "html") {
+  if (root?.tagName.toLowerCase() !== "html") {
     throw new AnnotDocParseError("Missing or invalid <html> root.");
   }
 

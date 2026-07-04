@@ -63,7 +63,7 @@ function findDir(root: MockDir, path: string): MockDir | undefined {
   let dir: MockDir = root;
   for (const segment of splitPath(path)) {
     const child = dir.children.get(segment);
-    if (!child || child.kind !== "directory") return undefined;
+    if (child?.kind !== "directory") return undefined;
     dir = child;
   }
   return dir;
@@ -111,7 +111,7 @@ export function createMockDesktopFs(libraryRoot: string = ROOT): DesktopFs {
 
     async readFile(path) {
       const entry = findEntry(root, normalisePath(path, libraryRoot));
-      if (!entry || entry.kind !== "file") {
+      if (entry?.kind !== "file") {
         throw new Error(`ENOENT: ${path}`);
       }
       // Defensive copy — callers shouldn't be able to mutate the

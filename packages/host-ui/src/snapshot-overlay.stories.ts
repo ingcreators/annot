@@ -12,7 +12,7 @@
 import type { ElementTree } from "@ingcreators/annot-core/element-tree";
 import type { Meta, StoryObj } from "@storybook/web-components-vite";
 import "./snapshot-overlay.js";
-import type { AnnotSnapshotOverlayElement, OverlayRegionPickDetail } from "./snapshot-overlay.js";
+import type { OverlayRegionPickDetail } from "./snapshot-overlay.js";
 
 interface Args {
   elementTree: ElementTree | undefined;

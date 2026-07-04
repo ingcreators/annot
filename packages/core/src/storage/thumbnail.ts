@@ -62,7 +62,7 @@ export function drawToThumbCanvas(
     const x = Math.round((targetW - finalW) / 2);
     const y = Math.round((targetH - finalH) / 2);
     // Use full source bounds → destination rect
-    ctx.drawImage(source as any, 0, 0, srcW, srcH, x, y, finalW, finalH);
+    ctx.drawImage(source as CanvasImageSource, 0, 0, srcW, srcH, x, y, finalW, finalH);
   } else {
     // Source is taller than the card: take only the TOP portion so the
     // screenshot's header/first content is visible. Fit width (no upscale).
@@ -73,6 +73,6 @@ export function drawToThumbCanvas(
     const srcSliceH = Math.min(targetH / scale, srcH);
     const finalH = Math.round(srcSliceH * scale);
     const x = Math.round((targetW - finalW) / 2);
-    ctx.drawImage(source as any, 0, 0, srcW, srcSliceH, x, 0, finalW, finalH);
+    ctx.drawImage(source as CanvasImageSource, 0, 0, srcW, srcSliceH, x, 0, finalW, finalH);
   }
 }
