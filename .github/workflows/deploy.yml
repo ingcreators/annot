@@ -28,10 +28,13 @@ name: Deploy
 # PWA artefact.
 #
 # What this workflow does NOT do:
-#   - Apply D1 migrations. `migrations:apply` stays manual —
+#   - Apply D1 migrations. Applying stays manual —
 #     a bad SQL change can brick production. The drift step
-#     below fails fast when local migrations aren't applied,
-#     and the operator re-dispatches after running the apply.
+#     below fails fast when local migrations aren't applied;
+#     the operator applies them (locally via `migrations:apply`,
+#     or from the Actions UI via the `apply-migrations.yml`
+#     workflow — no local Cloudflare auth needed) and
+#     re-dispatches this deploy.
 #   - Manage worker secrets. `wrangler secret put` is also
 #     manual; bootstrap + rotations stay operator-driven.
 #
@@ -145,8 +148,12 @@ jobs:
           echo "─────────────────────────────────────────"
           if echo "$output" | grep -qE "[0-9]{4}_[A-Za-z0-9_-]+\.sql"; then
             {
-              echo "::error::Pending D1 migrations detected. Apply them first, then re-dispatch:"
-              echo "::error::  pnpm --filter @ingcreators/annot-worker migrations:apply"
+              echo "::error::Pending D1 migrations detected. Apply them first, then re-dispatch this deploy."
+              echo "::error::Apply via EITHER:"
+              echo "::error::  - Actions UI: run the 'Apply D1 migrations' workflow"
+              echo "::error::    (apply-migrations.yml) with dry_run unchecked — no"
+              echo "::error::    local Cloudflare auth needed."
+              echo "::error::  - Locally: pnpm --filter @ingcreators/annot-worker migrations:apply"
               echo "::error:: "
               echo "::error::Both annot-api AND annot (PWA) deploys are blocked together"
               echo "::error::so they stay in lockstep — applying the migration + re-dispatch"
