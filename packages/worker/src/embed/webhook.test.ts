@@ -112,6 +112,7 @@ describe("/api/embed/webhook", () => {
         id: 7777,
         account: { login: "octocat", type: "User" },
       },
+      sender: { login: "octocat", id: 12345 },
     });
     const res = await app.request(
       "https://annot.work/api/embed/webhook",
@@ -131,6 +132,10 @@ describe("/api/embed/webhook", () => {
     expect(row?.account_login).toBe("octocat");
     expect(row?.account_type).toBe("User");
     expect(row?.repo_policy).toBe("pr-mode");
+    // Installer identity captured from the webhook sender so the
+    // claim gate can verify it later.
+    expect(row?.installed_by_id).toBe(12345);
+    expect(row?.installed_by_login).toBe("octocat");
   });
 
   it("sets suspended_at on installation=deleted", async () => {

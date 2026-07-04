@@ -197,6 +197,19 @@ prints the resulting binding IDs so you can paste them into
     -H "Content-Type: application/json" \
     -d '{ "repoPolicy": "pr-mode" }'
   ```
+  **Who may claim**: the claim is gated to the GitHub user who
+  installed the App (captured from the `installation.created`
+  webhook's `sender`). You must be signed in to annot.work **with
+  GitHub** (not Google) as that same user, or the PATCH returns
+  403 `not_authorised`. If the installer identity wasn't recorded
+  (a row seeded by the manifest-setup callback before the webhook
+  fired, or a pre-existing row), the claim fails closed — reinstall
+  the App so GitHub re-sends the event, or set `workspace_id`
+  directly in D1:
+  ```sh
+  pnpm --filter @ingcreators/annot-worker exec wrangler d1 execute annot-db --remote \
+    --command "UPDATE github_installations SET workspace_id = '<your-workspace-id>' WHERE id = <id>"
+  ```
 - **GitHub App webhook**: not consumed by 5z-1; future
   installation-lifecycle handling lives here.
 - **Build hooks**: configure per-installation via
@@ -230,6 +243,7 @@ prints the resulting binding IDs so you can paste them into
 |---|---|
 | `/api/embed/health` returns `ok: false` with one secret false | The matching `wrangler secret put` step was skipped. Re-run it and redeploy. |
 | Load / Save returns `not_authorised` (403) | The installation is unclaimed, or claimed by a different workspace. Claim it via `PATCH /api/embed/installations/:id` from the owning workspace (see "Claim the installation" above). |
+| Claim PATCH returns `not_authorised` (403) | You're not the GitHub user who installed the App, you're signed in with Google rather than GitHub, or the installer identity wasn't recorded. See "Who may claim" above. |
 | Load / Save returns `path_not_allowed` (403) | The requested paths fall outside the installation's `target_paths_json` allowlist. Widen (or NULL) the allowlist on the `github_installations` row. |
 | The editor loads, but Save 404s | The GitHub App isn't installed on the target repo. Visit the App's settings page → Install. |
 | Save returns `plan_required` (403) | The user account's plan doesn't allow private repos. Use a public repo OR upgrade the user's `users.plan` row. |

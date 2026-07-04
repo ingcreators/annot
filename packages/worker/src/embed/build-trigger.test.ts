@@ -11,12 +11,17 @@ async function seedSession(opts: {
   kv: KVNamespace;
   userId: string;
   workspaceId: string;
+  /** Defaults model the GitHub user who installed the App in the
+   *  claim-gate fixtures (providerUserId "12345"). */
+  provider?: "github" | "google";
+  providerUserId?: string;
+  login?: string;
 }): Promise<string> {
   const now = new Date().toISOString();
   const record: SessionRecord = {
-    provider: "github",
-    providerUserId: "12345",
-    login: "octocat",
+    provider: opts.provider ?? "github",
+    providerUserId: opts.providerUserId ?? "12345",
+    login: opts.login ?? "octocat",
     name: "Octocat",
     avatarUrl: "",
     createdAt: now,
@@ -58,6 +63,8 @@ describe("pingBuildHook", () => {
       default_branch_override: null,
       build_hook_url: null,
       target_paths_json: null,
+      installed_by_login: null,
+      installed_by_id: null,
       ...overrides,
     };
   }
@@ -181,6 +188,9 @@ describe("/api/embed/installations/:id PATCH", () => {
       accountLogin: "octocat",
       accountType: "User",
       workspaceId: null,
+      // Installer matches the seeded session (providerUserId "12345").
+      installedById: 12345,
+      installedByLogin: "octocat",
     });
     const env = makeMockEnv({ DB: db, SESSIONS: kv });
     const res = await app.request(
@@ -238,6 +248,9 @@ describe("/api/embed/installations/:id PATCH", () => {
       id: 52,
       accountLogin: "octocat",
       accountType: "User",
+      // Installer matches so the claim gate passes and validation
+      // (the 400 under test) is what rejects the request.
+      installedById: 12345,
     });
     const env = makeMockEnv({ DB: db, SESSIONS: kv });
     const res = await app.request(
@@ -250,5 +263,129 @@ describe("/api/embed/installations/:id PATCH", () => {
       env,
     );
     expect(res.status).toBe(400);
+  });
+
+  // ─── Claim gate: only the GitHub user who installed the App may
+  //     claim its (unclaimed) installation ───────────────────────
+
+  it("403 when a non-installer tries to claim an unclaimed installation", async () => {
+    const { db, userId, workspaceId } = await seedDb();
+    const kv = makeMockKv();
+    // Session is providerUserId "12345"; installer is a different id.
+    const cookie = await seedSession({ kv, userId, workspaceId });
+    await upsertGitHubInstallation(db, {
+      id: 60,
+      accountLogin: "acme",
+      accountType: "Organization",
+      installedById: 99999,
+      installedByLogin: "someone-else",
+    });
+    const env = makeMockEnv({ DB: db, SESSIONS: kv });
+    const res = await app.request(
+      "https://annot.work/api/embed/installations/60",
+      {
+        method: "PATCH",
+        headers: { Cookie: cookie, "Content-Type": "application/json" },
+        body: JSON.stringify({ repoPolicy: "pr-mode" }),
+      },
+      env,
+    );
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: string; message: string };
+    expect(body.error).toBe("not_authorised");
+    expect(body.message).toContain("who installed this App");
+    // The row stays unclaimed.
+    const row = await db
+      .prepare("SELECT workspace_id FROM github_installations WHERE id = 60")
+      .first<{ workspace_id: string | null }>();
+    expect(row?.workspace_id).toBeNull();
+  });
+
+  it("403 when the installer is unknown (NULL) — fails closed", async () => {
+    const { db, userId, workspaceId } = await seedDb();
+    const kv = makeMockKv();
+    const cookie = await seedSession({ kv, userId, workspaceId });
+    await upsertGitHubInstallation(db, {
+      id: 61,
+      accountLogin: "acme",
+      accountType: "Organization",
+      // No installer captured (webhook-less seed).
+    });
+    const env = makeMockEnv({ DB: db, SESSIONS: kv });
+    const res = await app.request(
+      "https://annot.work/api/embed/installations/61",
+      {
+        method: "PATCH",
+        headers: { Cookie: cookie, "Content-Type": "application/json" },
+        body: JSON.stringify({ repoPolicy: "pr-mode" }),
+      },
+      env,
+    );
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: string; message: string };
+    expect(body.error).toBe("not_authorised");
+    expect(body.message).toContain("not recorded");
+  });
+
+  it("403 when a Google-authenticated session tries to claim", async () => {
+    const { db, userId, workspaceId } = await seedDb();
+    const kv = makeMockKv();
+    const cookie = await seedSession({
+      kv,
+      userId,
+      workspaceId,
+      provider: "google",
+      providerUserId: "12345",
+    });
+    await upsertGitHubInstallation(db, {
+      id: 62,
+      accountLogin: "octocat",
+      accountType: "User",
+      // Even with a matching numeric id, a non-GitHub session can't
+      // prove GitHub account ownership.
+      installedById: 12345,
+    });
+    const env = makeMockEnv({ DB: db, SESSIONS: kv });
+    const res = await app.request(
+      "https://annot.work/api/embed/installations/62",
+      {
+        method: "PATCH",
+        headers: { Cookie: cookie, "Content-Type": "application/json" },
+        body: JSON.stringify({ repoPolicy: "pr-mode" }),
+      },
+      env,
+    );
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: string; message: string };
+    expect(body.error).toBe("not_authorised");
+    expect(body.message).toContain("GitHub-authenticated");
+  });
+
+  it("lets the owning workspace update fields without re-checking the installer", async () => {
+    const { db, userId, workspaceId } = await seedDb();
+    const kv = makeMockKv();
+    const cookie = await seedSession({ kv, userId, workspaceId });
+    // Already claimed by this workspace, installer is someone else.
+    await upsertGitHubInstallation(db, {
+      id: 63,
+      accountLogin: "octocat",
+      accountType: "User",
+      workspaceId,
+      installedById: 99999,
+    });
+    const env = makeMockEnv({ DB: db, SESSIONS: kv });
+    const res = await app.request(
+      "https://annot.work/api/embed/installations/63",
+      {
+        method: "PATCH",
+        headers: { Cookie: cookie, "Content-Type": "application/json" },
+        body: JSON.stringify({ repoPolicy: "direct-push" }),
+      },
+      env,
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; installation: { repo_policy: string } };
+    expect(body.ok).toBe(true);
+    expect(body.installation.repo_policy).toBe("direct-push");
   });
 });
