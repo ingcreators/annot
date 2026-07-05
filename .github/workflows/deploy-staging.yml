@@ -1,0 +1,135 @@
+name: Deploy staging
+
+# Manual (workflow_dispatch only) deploy of the parallel
+# `staging.annot.work` stack — Phase 3 of
+# `docs/plans/staging-environment.md`.
+#
+# This is deliberately NON-gating: it does not touch the production
+# `deploy.yml` flow. It stands up + validates staging end to end so
+# that Phase 4 (flipping prod to gate on a green staging run) can
+# land with confidence. Run it by hand from the Actions UI.
+#
+# ── Operator prerequisites (Phase 2, one-time) ──────────────────
+#   - staging D1 / KV / R2 created (annot-*-staging) and wired into
+#     each wrangler config's `env.staging` block.
+#   - a PROXIED `staging` DNS record on the annot.work zone, so
+#     `staging.annot.work/*` routes resolve. WITHOUT it the deploy
+#     steps may attach routes that never resolve and the smoke
+#     fails.
+#   - staging worker secrets set AFTER the first successful
+#     `annot-api-staging` deploy:
+#       wrangler secret put GITHUB_OAUTH_CLIENT_ID --env staging   (+ the rest)
+#     (auth-less endpoints like /api/health/bindings work without
+#     them, so the smoke below still passes pre-secrets.)
+#
+# The existing CLOUDFLARE_API_TOKEN covers staging: same account +
+# same annot.work zone routes, no new CI secret.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  # Serialise staging deploys; never entangle with the prod `deploy`
+  # group so a prod deploy can't cancel a staging run or vice versa.
+  group: deploy-staging
+  cancel-in-progress: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  deploy-staging:
+    name: deploy staging.annot.work
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck worker
+        run: pnpm --filter @ingcreators/annot-worker typecheck
+
+      # ── API worker first (same order as prod) ────────────────
+      - name: Deploy annot-api-staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm --filter @ingcreators/annot-worker exec wrangler deploy --env staging
+
+      # Apply migrations to the ISOLATED staging D1. Auto-applied
+      # here (staging is where a bad migration should fail); prod
+      # migrations stay operator-applied via apply-migrations.yml.
+      - name: Apply D1 migrations to annot-db-staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: >
+          pnpm --filter @ingcreators/annot-worker exec
+          wrangler d1 migrations apply annot-db-staging --remote --env staging
+
+      # ── Static-asset surfaces ────────────────────────────────
+      - name: Build annot (PWA), annot-marketing, annot-docs-site
+        run: >
+          pnpm
+          --filter @ingcreators/annot-core
+          --filter @ingcreators/annot-web
+          --filter @ingcreators/annot-marketing
+          --filter @ingcreators/annot-docs-site
+          build
+
+      - name: Deploy annot-staging (PWA)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec wrangler deploy --env staging
+
+      - name: Deploy annot-marketing-staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm --filter @ingcreators/annot-marketing exec wrangler deploy --env staging
+
+      - name: Deploy annot-docs-site-staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm --filter @ingcreators/annot-docs-site exec wrangler deploy --env staging
+
+      # ── Smoke the staging surfaces ────────────────────────────
+      - name: Smoke check staging.annot.work
+        run: |
+          set -euo pipefail
+          # API bindings probe (KV + D1 + R2) — no auth needed.
+          for i in {1..6}; do
+            if curl -sf --max-time 5 https://staging.annot.work/api/health/bindings \
+                 | tee /tmp/staging-health.json | grep -q '"ok":true'; then
+              echo "staging API bindings ok:"; cat /tmp/staging-health.json
+              break
+            fi
+            [ "$i" -eq 6 ] && { echo "staging API smoke failed:"; cat /tmp/staging-health.json || true; exit 1; }
+            echo "attempt $i failed; retrying in 5s…"; sleep 5
+          done
+          # Static surfaces return 200.
+          for url in \
+            "https://staging.annot.work/" \
+            "https://staging.annot.work/app/" \
+            "https://staging.annot.work/docs/"; do
+            if curl -sfI --max-time 5 "$url" | grep -qE "^HTTP/.* (200|301|302)"; then
+              echo "ok: $url"
+            else
+              echo "staging static smoke failed for $url"; exit 1
+            fi
+          done

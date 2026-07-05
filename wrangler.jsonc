@@ -45,17 +45,32 @@
 		"binding": "ASSETS",
 		"not_found_handling": "single-page-application"
 	},
-	"kv_namespaces": [
-		{
-			"binding": "SESSIONS",
-			"id": "bcf47845acab46ba92254f167bab5190"
+	// Staging: `wrangler deploy --env staging` → annot-staging on
+	// staging.annot.work/app*. Same worker.js + assets as prod; only
+	// name + routes differ. See docs/plans/staging-environment.md.
+	//
+	// The unused top-level SESSIONS / D1 bindings were dropped here:
+	// worker.js only reads `env.ASSETS` (URL rewrite), never the
+	// session store or DB, so binding them widened the attack
+	// surface for no reason (staging plan note).
+	"env": {
+		"staging": {
+			"name": "annot-staging",
+			"routes": [
+				{
+					"pattern": "staging.annot.work/app",
+					"zone_name": "annot.work"
+				},
+				{
+					"pattern": "staging.annot.work/app/*",
+					"zone_name": "annot.work"
+				}
+			],
+			"assets": {
+				"directory": "./packages/web/dist",
+				"binding": "ASSETS",
+				"not_found_handling": "single-page-application"
+			}
 		}
-	],
-	"d1_databases": [
-		{
-			"binding": "annot_db",
-			"database_name": "annot-db",
-			"database_id": "30492e01-73f8-4898-8e04-96af6f805acb"
-		}
-	]
+	}
 }

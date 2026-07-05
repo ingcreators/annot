@@ -51,5 +51,28 @@
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "404-page"
+  },
+  // Staging: `wrangler deploy --env staging` → annot-docs-site-astro-staging
+  // on staging.annot.work/docs*. Same worker.js + assets as prod;
+  // only name + routes differ. See docs/plans/staging-environment.md.
+  "env": {
+    "staging": {
+      "name": "annot-docs-site-astro-staging",
+      "routes": [
+        {
+          "pattern": "staging.annot.work/docs",
+          "zone_name": "annot.work"
+        },
+        {
+          "pattern": "staging.annot.work/docs/*",
+          "zone_name": "annot.work"
+        }
+      ],
+      "assets": {
+        "directory": "./dist",
+        "binding": "ASSETS",
+        "not_found_handling": "404-page"
+      }
+    }
   }
 }

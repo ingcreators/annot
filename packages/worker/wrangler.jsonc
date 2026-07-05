@@ -151,7 +151,50 @@
       "binding": "OBJECTS",
       "bucket_name": "annot-objects"
     }
-  ]
+  ],
+
+  // ─── Staging environment ─────────────────────────────────
+  //
+  // `wrangler deploy --env staging` publishes `annot-api-staging`
+  // on `staging.annot.work/api/*` with ISOLATED D1 / KV / R2
+  // (created via `wrangler {d1,kv,r2} create annot-*-staging`).
+  // Binding names match prod (`SESSIONS` / `DB` / `OBJECTS`) so the
+  // worker code is env-agnostic — only the underlying resources
+  // differ. Bindings + routes are NOT inherited from the top level
+  // by wrangler, so they're redeclared here. Deployed only by the
+  // `deploy-staging.yml` workflow, never by a production deploy.
+  // See docs/plans/staging-environment.md.
+  "env": {
+    "staging": {
+      "name": "annot-api-staging",
+      "routes": [
+        {
+          "pattern": "staging.annot.work/api/*",
+          "zone_name": "annot.work"
+        }
+      ],
+      "kv_namespaces": [
+        {
+          "binding": "SESSIONS",
+          "id": "a33e1573826248248914e47bc7f1443b"
+        }
+      ],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "annot-db-staging",
+          "database_id": "91c08b5d-827a-42b1-be3d-8135b2e334ba",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "OBJECTS",
+          "bucket_name": "annot-objects-staging"
+        }
+      ]
+    }
+  }
 
   // Secrets (set via `wrangler secret put`):
   //   - GITHUB_OAUTH_CLIENT_ID    (Phase 2c)
