@@ -124,7 +124,18 @@ jobs:
       # deploy to both staging and prod (staging mirrors prod). Built
       # before either stage so a build failure stops everything
       # before any deploy. turbo dedupes the shared work.
+      # `VITE_GOOGLE_*` are Vite build-time env — inlined into the
+      # PWA bundle so the client-side Google Drive integration
+      # (`google-auth.ts` → GIS `initTokenClient` + Picker) has a
+      # client id + API key. Without them the bundle ships an empty
+      # `client_id` and Drive connect throws "Missing required
+      # parameter client_id." They're public values (visible in the
+      # shipped JS); kept as secrets here only for config-management
+      # convenience. The same build feeds staging + prod.
       - name: Build annot (PWA), annot-marketing, annot-docs-site (Astro Starlight)
+        env:
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
+          VITE_GOOGLE_API_KEY: ${{ secrets.VITE_GOOGLE_API_KEY }}
         run: >
           pnpm
           --filter @ingcreators/annot-core
