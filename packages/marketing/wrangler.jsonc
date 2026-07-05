@@ -35,5 +35,23 @@
   "assets": {
     "directory": "./dist",
     "not_found_handling": "404-page"
+  },
+  // Staging: `wrangler deploy --env staging` → annot-marketing-staging
+  // on staging.annot.work/* (catch-all). See
+  // docs/plans/staging-environment.md.
+  "env": {
+    "staging": {
+      "name": "annot-marketing-staging",
+      "routes": [
+        {
+          "pattern": "staging.annot.work/*",
+          "zone_name": "annot.work"
+        }
+      ],
+      "assets": {
+        "directory": "./dist",
+        "not_found_handling": "404-page"
+      }
+    }
   }
 }
