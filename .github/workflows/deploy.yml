@@ -1,52 +1,44 @@
 name: Deploy
 
-# Unified deploy for BOTH Cloudflare Workers under the
-# `annot.work` zone:
+# Staged deploy for the four Cloudflare Workers on the `annot.work`
+# zone. Every push to `main` (touching a deployable path) runs TWO
+# stages in ONE job:
 #
-#   1. `annot-api`  — the API worker at `annot.work/api/*`
-#                     (`packages/worker/`, `wrangler.jsonc`).
-#   2. `annot`      — the static-assets worker that serves the
-#                     PWA at `annot.work/*` (`packages/web/dist/`,
-#                     root `wrangler.jsonc`).
+#   STAGING STAGE → deploy the four `*-staging` Workers on
+#                   staging.annot.work, auto-apply migrations to the
+#                   ISOLATED `annot-db-staging`, and smoke staging.
+#   ── gate ──      Steps run sequentially; a failed step halts the
+#                   job and SKIPS the prod stage. Production is never
+#                   fronted by a build that didn't deploy + smoke
+#                   cleanly on staging first (Phase 4 of
+#                   docs/plans/staging-environment.md — closes the
+#                   "ships straight to prod" audit gap).
+#   PROD STAGE    → the prod D1 drift gate, then deploy the four
+#                   production Workers on annot.work + smoke.
 #
-# Why one workflow, not two? The PWA and the API are co-deployed
-# product surfaces: the PWA calls API endpoints + reads schema
-# the API expects to exist. Splitting them into separate
-# pipelines lets the PWA ship a `fetch("/api/foo")` while the API
-# is still on the prior version, producing brief windows of
-# "endpoint 404" or "missing column" 500 visible to users.
+# Migrations:
+#   - STAGING is AUTO-applied here — staging is where a bad migration
+#     should fail, before it can reach prod.
+#   - PROD stays operator-applied. The prod drift gate blocks the
+#     prod stage until the migration is applied (locally via
+#     `migrations:apply`, or the `apply-migrations.yml` workflow),
+#     then re-dispatch. The staging stage re-runs idempotently.
 #
-# This workflow gates BOTH deploys behind the same D1 migration
-# drift check: if local migrations aren't applied to the remote
-# DB, neither half ships. The operator runs `migrations:apply`
-# and re-dispatches, and both halves catch up in lockstep.
+# The four Workers are co-deployed product surfaces (the PWA calls
+# API endpoints + reads schema the API expects); within each stage
+# the API deploys before the PWA to minimise mismatched-window
+# 404/500s.
 #
-# Trust model: runs AFTER the merge — `ci.yml` already vouched
-# for typecheck + test + lint + storybook. The deploy job re-runs
-# the worker's typecheck (cheap, catches type-conflicts at the
-# merged tip) and lets the existing `pnpm build` produce the
-# PWA artefact.
+# Secrets: `wrangler secret put` stays manual / operator-driven.
 #
-# What this workflow does NOT do:
-#   - Apply D1 migrations. Applying stays manual —
-#     a bad SQL change can brick production. The drift step
-#     below fails fast when local migrations aren't applied;
-#     the operator applies them (locally via `migrations:apply`,
-#     or from the Actions UI via the `apply-migrations.yml`
-#     workflow — no local Cloudflare auth needed) and
-#     re-dispatches this deploy.
-#   - Manage worker secrets. `wrangler secret put` is also
-#     manual; bootstrap + rotations stay operator-driven.
-#
-# IMPORTANT — Cloudflare-side coordination:
-#
-# The Cloudflare Workers Builds integration for the `annot`
-# worker MUST be disabled in the Cloudflare dashboard
-# (Workers & Pages → annot → Settings → Builds → Disconnect).
-# Otherwise Cloudflare watches GitHub itself and races this
-# workflow, defeating the migration-drift gate. The first run
-# after disabling needs `workflow_dispatch` from the Actions UI
-# to seed both deploys.
+# IMPORTANT — the Cloudflare Workers Builds integration for `annot`
+# / `annot-api` MUST stay disabled in the dashboard (Workers & Pages
+# → … → Settings → Builds → Disconnect), else Cloudflare watches
+# GitHub itself, races this workflow, and defeats the staging gate.
+# (The standalone `deploy-staging.yml` is a manual, on-demand staging
+# deploy from any ref — complementary to this auto staging→prod flow.
+# Don't run it concurrently with a deploy here; both target the same
+# staging Workers.)
 
 on:
   push:
@@ -59,7 +51,7 @@ on:
     paths:
       # ─── Include ───────────────────────────────────────────
       # Workspace package source — any package change can
-      # affect any of the four deployed bundles. The negations
+      # affect any of the deployed bundles. The negations
       # below trim back the demonstrably-non-deployable subsets.
       - "packages/**"
       # Root config that defines the PWA worker.
@@ -105,9 +97,9 @@ env:
 
 jobs:
   deploy:
-    name: deploy annot + annot-api
+    name: deploy staging → prod (annot.work)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -125,17 +117,94 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # ── 1. API typecheck (sanity gate) ───────────────────────
       - name: Typecheck worker
         run: pnpm --filter @ingcreators/annot-worker typecheck
 
-      # ── 2. Migration drift guard ─────────────────────────────
-      # If local `packages/worker/migrations/*.sql` files aren't
-      # all recorded in the remote `d1_migrations` table, BOTH
-      # deploys are blocked. Operator runs:
-      #     pnpm --filter @ingcreators/annot-worker migrations:apply
-      # …then re-dispatches from the Actions UI.
-      - name: Check for pending D1 migrations
+      # Build every static-asset bundle ONCE — the same artefacts
+      # deploy to both staging and prod (staging mirrors prod). Built
+      # before either stage so a build failure stops everything
+      # before any deploy. turbo dedupes the shared work.
+      - name: Build annot (PWA), annot-marketing, annot-docs-site (Astro Starlight)
+        run: >
+          pnpm
+          --filter @ingcreators/annot-core
+          --filter @ingcreators/annot-web
+          --filter @ingcreators/annot-marketing
+          --filter @ingcreators/annot-docs-site
+          build
+
+      # ══════════════════════ STAGING STAGE ══════════════════════
+      # Deploy + migrate + smoke staging.annot.work. Any failure
+      # below halts the job before the PROD STAGE runs.
+
+      - name: (staging) Deploy annot-api-staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm --filter @ingcreators/annot-worker exec wrangler deploy --env staging
+
+      # Auto-apply to the ISOLATED staging D1. If a migration is bad
+      # it fails HERE (staging), never on prod. Idempotent — a
+      # re-dispatch skips already-applied migrations.
+      - name: (staging) Apply D1 migrations to annot-db-staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: >
+          pnpm --filter @ingcreators/annot-worker exec
+          wrangler d1 migrations apply annot-db-staging --remote --env staging
+
+      - name: (staging) Deploy annot-staging (PWA)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec wrangler deploy --env staging
+
+      - name: (staging) Deploy annot-marketing-staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm --filter @ingcreators/annot-marketing exec wrangler deploy --env staging
+
+      - name: (staging) Deploy annot-docs-site-staging
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm --filter @ingcreators/annot-docs-site exec wrangler deploy --env staging
+
+      - name: (staging) Smoke check staging.annot.work
+        run: |
+          set -euo pipefail
+          for i in {1..6}; do
+            if curl -sf --max-time 5 https://staging.annot.work/api/health/bindings \
+                 | tee /tmp/staging-health.json | grep -q '"ok":true'; then
+              echo "staging API bindings ok:"; cat /tmp/staging-health.json; break
+            fi
+            [ "$i" -eq 6 ] && { echo "::error::staging API smoke failed"; cat /tmp/staging-health.json || true; exit 1; }
+            echo "  attempt $i failed; retrying in 5s…"; sleep 5
+          done
+          for url in \
+            "https://staging.annot.work/" \
+            "https://staging.annot.work/app/" \
+            "https://staging.annot.work/docs/"; do
+            if curl -sfI --max-time 5 "$url" | grep -qE "^HTTP/.* (200|301|302)"; then
+              echo "✓ $url"
+            else
+              echo "::error::staging static smoke failed for $url"; exit 1
+            fi
+          done
+
+      # ══════════ gate: staging green → promote to prod ══════════
+      - name: Gate — staging is green, promoting to production
+        run: echo "Staging deployed + smoked clean. Proceeding to the production stage."
+
+      # ══════════════════════ PROD STAGE ═════════════════════════
+
+      # Prod D1 drift guard. Unlike staging (auto-applied above), a
+      # pending PROD migration BLOCKS this stage — the operator
+      # applies it deliberately (staging has already proven the SQL
+      # applies), then re-dispatches.
+      - name: (prod) Check for pending D1 migrations
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -148,148 +217,75 @@ jobs:
           echo "─────────────────────────────────────────"
           if echo "$output" | grep -qE "[0-9]{4}_[A-Za-z0-9_-]+\.sql"; then
             {
-              echo "::error::Pending D1 migrations detected. Apply them first, then re-dispatch this deploy."
-              echo "::error::Apply via EITHER:"
-              echo "::error::  - Actions UI: run the 'Apply D1 migrations' workflow"
-              echo "::error::    (apply-migrations.yml) with dry_run unchecked — no"
-              echo "::error::    local Cloudflare auth needed."
+              echo "::error::Pending PROD D1 migrations detected — the prod stage is blocked."
+              echo "::error::Staging already applied + validated them; now apply to prod via EITHER:"
+              echo "::error::  - Actions UI: run 'Apply D1 migrations' (apply-migrations.yml), dry_run off."
               echo "::error::  - Locally: pnpm --filter @ingcreators/annot-worker migrations:apply"
-              echo "::error:: "
-              echo "::error::Both annot-api AND annot (PWA) deploys are blocked together"
-              echo "::error::so they stay in lockstep — applying the migration + re-dispatch"
-              echo "::error::brings both up to the merged-main version simultaneously."
+              echo "::error::then re-dispatch this deploy. Staging re-runs idempotently."
             } 1>&2
             exit 1
           fi
-          echo "✓ D1 schema is up to date — proceeding with deploy."
+          echo "✓ Prod D1 schema is up to date — proceeding with the prod deploy."
 
-      # ── 3. Deploy annot-api FIRST ────────────────────────────
-      # API ships before PWA so that when the PWA's new bundle
-      # lands on browsers, the API endpoints it expects are
-      # already live. Reverse order produces "PWA calls
-      # nonexistent endpoint" 404s while the older PWA on
-      # other browsers might call a removed endpoint and 404
-      # — net: API-first minimises mismatched-window pain.
-      - name: Deploy annot-api
+      # API ships before PWA so the endpoints the new PWA bundle
+      # calls are already live.
+      - name: (prod) Deploy annot-api
         env:
-          # Cloudflare API token with:
-          #   - Account: Workers Scripts:Edit       (publish both Workers)
-          #   - Account: Workers R2 Storage:Edit    (R2 binding on annot-api)
-          #   - Account: Workers KV Storage:Edit    (KV binding on annot-api)
-          #   - Account: D1:Edit                    (drift check + migrations)
-          #   - Account: Workers Observability:Edit (annot-api logs)
-          #   - Account: Workers Tail:Read          (annot-api logs)
-          #   - Account: Account Settings:Read      (wrangler whoami)
-          #   - Zone: Workers Routes:Edit on annot.work
-          #   - User: User Details:Read, Memberships:Read
+          # Cloudflare API token scopes (Account unless noted):
+          #   Workers Scripts:Edit, Workers R2 Storage:Edit,
+          #   Workers KV Storage:Edit, D1:Edit,
+          #   Workers Observability:Edit, Workers Tail:Read,
+          #   Account Settings:Read, Zone Workers Routes:Edit
+          #   (annot.work), User Details:Read + Memberships:Read.
+          # Account-level D1/KV/R2 scopes also cover the *-staging
+          # resources, so the same token drives both stages.
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm --filter @ingcreators/annot-worker cf:deploy
 
-      # ── 4. Smoke check the API ───────────────────────────────
-      # Up to 30s of retries to absorb Cloudflare edge propagation.
-      - name: Smoke check /api/health/bindings
+      - name: (prod) Smoke check /api/health/bindings
         run: |
           set -euo pipefail
           for i in {1..6}; do
             if curl -sf --max-time 5 https://annot.work/api/health/bindings | tee /tmp/health.json | grep -q '"ok":true'; then
-              echo "API smoke check passed:"
-              cat /tmp/health.json
-              exit 0
+              echo "API smoke check passed:"; cat /tmp/health.json; exit 0
             fi
-            echo "Attempt $i failed; retrying in 5s…"
-            sleep 5
+            echo "Attempt $i failed; retrying in 5s…"; sleep 5
           done
           echo "API smoke check failed after 30s. Last body:"
           cat /tmp/health.json || echo "(no body)"
           exit 1
 
-      # ── 5. Build every static-asset bundle ───────────────────
-      # `annot-core` ships a `vite-plugin-dts`-generated `dist/`
-      # that `annot-web`'s build resolves via the `exports` map;
-      # we build it explicitly to mirror what `ci.yml` does, even
-      # though Vite would also read from `src/` directly via the
-      # exports conditionals — being explicit avoids drift if a
-      # future `tsc`-only consumer of `annot-core/dist` arrives.
-      #
-      # Phase 8d adds two new asset-server workers (marketing
-      # landing + VitePress docs). Build all three in one
-      # invocation; turbo dedupes the shared work.
-      - name: Build annot (PWA), annot-marketing, annot-docs-site (Astro Starlight)
-        run: >
-          pnpm
-          --filter @ingcreators/annot-core
-          --filter @ingcreators/annot-web
-          --filter @ingcreators/annot-marketing
-          --filter @ingcreators/annot-docs-site
-          build
-
-      # ── 6. Deploy the PWA worker (annot.work/app/*) ──────────
-      # Root `wrangler.jsonc` declares the `annot` worker which
-      # serves `packages/web/dist/` under
-      # `not_found_handling: single-page-application` (SPA
-      # fallthrough). `wrangler deploy` from the repo root
-      # picks up the root config.
-      #
-      # Phase 8d: route binding changed from `annot.work/*` to
-      # `annot.work/app/*`. The old `/*` binding was removed
-      # manually via the Cloudflare dashboard during the cutover
-      # (see launch-prep.md operator checklist) — wrangler
-      # doesn't garbage-collect removed routes on its own.
-      - name: Deploy annot (PWA)
+      - name: (prod) Deploy annot (PWA)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm exec wrangler deploy
 
-      # ── 7. Deploy the marketing worker (annot.work/*) ────────
-      # `packages/marketing/wrangler.jsonc` defines this worker.
-      # It claims `annot.work/*` — Cloudflare's longest-prefix
-      # rule means it serves only paths NOT under /api/, /app/,
-      # or /docs/, which are all claimed by more-specific
-      # workers.
-      - name: Deploy annot-marketing
+      - name: (prod) Deploy annot-marketing
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm --filter @ingcreators/annot-marketing cf:deploy
 
-      # ── 8a. Free the annot.work/docs route ───────────────────
-      # The legacy VitePress Worker (`annot-docs-site`) was
-      # retired in PR #913 but its Cloudflare-side Worker entry
-      # still holds the `annot.work/docs` + `annot.work/docs/*`
-      # route claim. Cloudflare blocks two Workers from claiming
-      # the same route, so we delete the legacy Worker before
-      # the new one (`annot-docs-site-astro`) tries to claim it.
-      # `continue-on-error: true` because once the Worker is
-      # gone, subsequent deploys would fail this step — it's
-      # idempotent only on the first run, then becomes a no-op
-      # advisory.
-      - name: Delete legacy annot-docs-site Worker (one-time)
+      # Legacy VitePress Worker still holds the annot.work/docs route
+      # claim on Cloudflare; delete it before the Astro worker claims
+      # the route. `continue-on-error` — idempotent only on the first
+      # run, a no-op advisory afterwards.
+      - name: (prod) Delete legacy annot-docs-site Worker (one-time)
         continue-on-error: true
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm dlx wrangler delete --name annot-docs-site --force
 
-      # ── 8b. Deploy the Astro Starlight docs site ──────────────
-      # The Worker is named `annot-docs-site-astro` on
-      # Cloudflare's side (avoiding the Cloudflare-side rename
-      # that would otherwise require the legacy Worker to be
-      # deleted first; with step 8a above doing that delete,
-      # we could now rename — deferred to a follow-up to keep
-      # this PR's blast radius minimal).
-      - name: Deploy annot-docs-site (Astro Starlight)
+      - name: (prod) Deploy annot-docs-site (Astro Starlight)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: pnpm --filter @ingcreators/annot-docs-site cf:deploy
 
-      # ── 9. Smoke check all three asset surfaces ──────────────
-      # One pass per surface. Up to 30s of retries each to absorb
-      # Cloudflare edge propagation. A failure in any one fails
-      # the workflow — partial states need operator review.
-      - name: Smoke check annot.work surfaces
+      - name: (prod) Smoke check annot.work surfaces
         run: |
           set -euo pipefail
           smoke() {

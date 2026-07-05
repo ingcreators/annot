@@ -1,11 +1,17 @@
 # Staging environment (`staging.annot.work`)
 
-> **Status:** Queued — topology + scope signed off 2026-07-05
->   (separate staging with isolated bindings + promote-gate; all
->   four `annot.work` surfaces). Phase 2 (operator provisioning) is
->   the hard prerequisite for the code phases; the pipeline
->   restructure (Phase 4) must NOT land before staging resources
->   exist or every production deploy breaks.
+> **Status:** In progress — Phases 1–4 landed 2026-07-05.
+>   Phase 2 provisioning done (`annot-db-staging` `91c08b5d…`,
+>   `annot-sessions-staging` `a33e1573…`, `annot-objects-staging`,
+>   proxied `staging` DNS). Phase 3 (`env.staging` × 4 +
+>   `deploy-staging.yml`) landed + verified — a manual
+>   `deploy-staging` run deployed all four staging Workers, applied
+>   migrations to the isolated staging D1, and smoked
+>   `staging.annot.work` green (bindings ok; `/`, `/app/`, `/docs/`
+>   all 200). Phase 4 rewrote `deploy.yml` to the staging→gate→prod
+>   flow. **Remaining (optional, non-blocking):** staging OAuth
+>   callbacks + `wrangler secret put --env staging` to enable
+>   sign-in ON staging (the stack + smoke work without them; OQ-1).
 > **Compatibility:** Adds a parallel `staging.annot.work` stack
 >   (four new Worker names + isolated D1 / KV / R2 for the API).
 >   No change to the production `annot.work` behaviour until the
