@@ -29,7 +29,7 @@
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",
     "@storybook/web-components-vite": "^10.4.6",
-    "chrome-types": "^0.1.431",
+    "chrome-types": "^0.1.433",
     "typescript": "catalog:",
     "vite": "catalog:"
   }
