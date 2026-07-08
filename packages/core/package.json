@@ -90,6 +90,6 @@
   },
   "dependencies": {
     "js-yaml": "^4.2.0",
-    "pako": "^2.1.0"
+    "pako": "^3.0.1"
   }
 }
