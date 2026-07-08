@@ -46,8 +46,8 @@
     "fake-indexeddb": "^6",
     "happy-dom": "^20",
     "msw": "^2.14",
-    "turbo": "^2.10.0",
+    "turbo": "^2.10.3",
     "vitest": "^4.1.9",
-    "wrangler": "^4.105.0"
+    "wrangler": "^4.107.0"
   }
 }
