@@ -1,4 +1,4 @@
-// Astro 5 config for the workflow-app example's docs site.
+// Astro 7 config for the workflow-app example's docs site.
 //
 // Reads MDX content collections from the sibling
 // `../docs/books/<book>/` so the same MDX source serves

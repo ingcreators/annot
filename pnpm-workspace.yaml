@@ -55,6 +55,18 @@ overrides:
   "undici@>=7.0.0 <7.28.0": ">=7.28.0"
   # GHSA advisory: ws memory-exhaustion DoS (vitest + miniflare chains)
   "ws@>=8.0.0 <8.21.0": ">=8.21.0"
+  # GHSA advisory: node-tar PAX size-override parser differential
+  # (file smuggling)
+  "tar@<7.5.16": ">=7.5.16"
+  # GHSA advisory: uuid missing buffer bounds check in v3/v5/v6
+  # (exceljs chain; exceljs only calls v4() without a buf, but the
+  # bump is API-compatible for that call)
+  "uuid@<11.1.1": ">=11.1.1 <12.0.0"
+  # GHSA advisory: yaml stack overflow via deeply nested collections
+  "yaml@>=2.0.0 <2.8.3": ">=2.8.3"
+  # GHSA advisory: @babel/core arbitrary file read via
+  # sourceMappingURL comment
+  "@babel/core@<7.29.6": ">=7.29.6 <8.0.0"
   # NOTE: the vite 7.x server.fs.deny advisory (astro 6 chain) is NOT
   # overridden here — an override rewrites Storybook's / vite-plugin-dts'
   # peer ranges too. The astro 6.4.6 bump re-resolves its vite to 7.3.5.
