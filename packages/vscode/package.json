@@ -108,7 +108,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@types/node": "^25",
+    "@types/node": "^26",
     "@types/vscode": "^1.125.0",
     "typescript": "catalog:",
     "vite": "catalog:"
