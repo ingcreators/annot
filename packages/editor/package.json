@@ -20,7 +20,7 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
-    "@types/node": "^25",
+    "@types/node": "^26",
     "typescript": "catalog:",
     "vite": "catalog:"
   },
