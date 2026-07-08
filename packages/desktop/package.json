@@ -107,7 +107,7 @@
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^26",
     "chrome-types": "^0.1.433",
-    "electron": "^42.5.0",
+    "electron": "^43.1.0",
     "electron-builder": "^26.15.3",
     "electron-vite": "6.0.0-beta.1",
     "typescript": "catalog:",
