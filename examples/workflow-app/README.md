@@ -42,7 +42,7 @@ examples/workflow-app/
     books/
       operation-manual/    # 10 MDX files (cover + OM-001..OM-009)
       screen-design/       #  9 MDX files (cover + SD-001..SD-008)
-  docs-site/               # Astro 5 docs site (Phase 5)
+  docs-site/               # Astro 7 docs site (Phase 5)
     package.json           # Separate npm project (depends on @ingcreators/annot-product-docs-astro)
     astro.config.mjs       # mdx() + productDocsIntegration() + ssr.noExternal for the components
     src/
@@ -94,7 +94,7 @@ npm run dev    # http://localhost:4321/
 ```
 
 The site reads MDX from `../docs/books/{operation-manual,screen-design}/`
-via Astro 5's `glob()` content loader, so editing an MDX file
+via Astro's `glob()` content loader, so editing an MDX file
 hot-reloads the matching docs route.
 
 ## Docs tour (refresh screenshots + MDX snapshots)
