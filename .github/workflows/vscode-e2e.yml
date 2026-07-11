@@ -1,0 +1,71 @@
+# VSCode extension e2e suite — downloads VS Code desktop
+# (@vscode/test-electron), launches it under xvfb through
+# Playwright's Electron driver with --extensionDevelopmentPath,
+# and drives the Annot custom-editor webview: open *.annot.svg,
+# draw, VS Code dirty marker, Ctrl+S → saveCustomDocument →
+# bytes written back to the original file.
+#
+# Advisory (`continue-on-error: true`) to start, mirroring the
+# docs-tour / web-e2e / ext-e2e precedent.
+
+name: vscode-e2e
+
+on:
+  pull_request:
+    paths:
+      - "packages/vscode/**"
+      - "packages/host-ui/**"
+      - "packages/editor/**"
+      - "packages/core/**"
+      - "packages/doc/**"
+      - ".github/workflows/vscode-e2e.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vscode-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  e2e:
+    name: Playwright e2e (packages/vscode)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true # advisory — see header comment
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache VS Code download
+        uses: actions/cache@v6
+        with:
+          path: packages/vscode/.vscode-test/vscode-*
+          key: vscode-test-electron-${{ runner.os }}
+
+      - name: Run e2e suite
+        run: pnpm --filter @ingcreators/annot-vscode e2e
+
+      - name: Upload traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-traces-vscode
+          path: packages/vscode/test-results/
+          retention-days: 7
+          if-no-files-found: ignore

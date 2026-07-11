@@ -202,7 +202,12 @@ function decodeRecord(filePath: string, filename: string, bytes: Uint8Array): Im
     const dims = parseSvgDims(svg);
     return {
       ...base,
-      originalDataUrl: "",
+      // The base screenshot must be carried on the record:
+      // `restoreAnnotations` deliberately skips the root-level
+      // `<image>` (annotations only), so leaving this empty mounts
+      // a blank canvas — and the next Ctrl+S then writes
+      // `href=""` back to disk, destroying the screenshot pixels.
+      originalDataUrl: extractBaseImageHref(svg),
       annotationsSvg: svg,
       width: dims.width,
       height: dims.height,
@@ -820,6 +825,21 @@ window.addEventListener("message", (event) => {
 vscode.postMessage({ type: "ready" });
 
 // ─── Helpers ───────────────────────────────────────────────────
+
+/** Pull the base screenshot's data URL out of a saved `.annot.svg`.
+ *  The base bitmap is the root-level `<image>` that is neither a
+ *  mosaic / blur redact (`data-redact-style`) nor inside a `<g>` —
+ *  the same discriminator `restoreAnnotations` uses to SKIP it. */
+function extractBaseImageHref(svg: string): string {
+  const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
+  for (const image of Array.from(doc.documentElement.querySelectorAll("image"))) {
+    if (image.closest("g")) continue;
+    if (image.hasAttribute("data-redact-style")) continue;
+    const href = image.getAttribute("href") ?? image.getAttribute("xlink:href") ?? "";
+    if (href.startsWith("data:")) return href;
+  }
+  return "";
+}
 
 function parseSvgDims(svg: string): { width: number; height: number } {
   const w = svg.match(/<svg[^>]*\bwidth\s*=\s*["']?(\d+(?:\.\d+)?)/i);

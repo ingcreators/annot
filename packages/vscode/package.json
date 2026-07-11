@@ -105,11 +105,14 @@
     "build:extension": "vite build --config vite.extension.config.ts",
     "build:webview": "vite build --config vite.webview.config.ts",
     "build": "pnpm run build:extension && pnpm run build:webview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tests/e2e",
+    "e2e": "pnpm build && xvfb-run -a pnpm exec playwright test"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@types/node": "^26",
     "@types/vscode": "^1.125.0",
+    "@vscode/test-electron": "^3.0.0",
     "typescript": "catalog:",
     "vite": "catalog:"
   },
