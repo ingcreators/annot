@@ -67,6 +67,21 @@ import { buildEditableImageBlob } from "./image-encode.js";
  */
 const LEGACY_INDEX_FILE = ".annot.json";
 
+/** Decode raster bytes to recover pixel dimensions. Fail-soft:
+ *  returns 0×0 when decoding is unavailable (non-browser test
+ *  environments) or the bytes are unparseable — callers treat
+ *  that the same as "dimensions unknown". */
+async function probeRasterDims(blob: Blob): Promise<{ width: number; height: number }> {
+  try {
+    const bitmap = await createImageBitmap(blob);
+    const dims = { width: bitmap.width, height: bitmap.height };
+    bitmap.close();
+    return dims;
+  } catch {
+    return { width: 0, height: 0 };
+  }
+}
+
 export class DeviceStore
   implements
     StorageProvider,
@@ -447,14 +462,20 @@ export class DeviceStore
       const version = String(file.lastModified);
       const cached = await this.#c().getImage(this.#ns(), path, version);
       const createdAt = cached?.createdAt ?? new Date(file.lastModified).toISOString();
+      // No XMP packet (an external image dropped into the folder):
+      // probe the real pixel dimensions — a 0×0 record mounts a 0×0
+      // canvas svg (blank editor) since the shell sizes the canvas
+      // from the record, not from the decoded bitmap. Mirrors the
+      // vscode webview's raw-raster fallback and DesktopStore.
+      const probed = meta ? null : await probeRasterDims(file);
       return {
         path,
         folderPath: getParentPath(path),
         originalDataUrl: meta?.originalImageDataUrl || (await this.#fileToDataUrl(file)),
         thumbnailDataUrl: "",
         annotationsSvg: meta?.annotationsSvg || "",
-        width: meta?.width || 0,
-        height: meta?.height || 0,
+        width: meta?.width || probed?.width || 0,
+        height: meta?.height || probed?.height || 0,
         sourceUrl: cached?.sourceUrl ?? "",
         tags: meta?.tags || {},
         createdAt,
