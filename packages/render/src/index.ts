@@ -55,6 +55,7 @@ export {
 // `editor-shell.ts` / `pptx-export.ts` static imports of the
 // barrel pull the submodule into the main chunk —
 // `[INEFFECTIVE_DYNAMIC_IMPORT]` Rollup warning).
+export { probeRasterDims } from "./raster-dims.js";
 export {
   burnRedactionsIntoBitmap,
   classifyRedact,

@@ -154,6 +154,9 @@ importers:
       '@ingcreators/annot-host-ui':
         specifier: workspace:*
         version: link:../host-ui
+      '@ingcreators/annot-render':
+        specifier: workspace:*
+        version: link:../render
       '@ingcreators/annot-web':
         specifier: workspace:*
         version: link:../web

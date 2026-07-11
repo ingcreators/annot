@@ -101,6 +101,7 @@
     "@ingcreators/annot-doc": "workspace:*",
     "@ingcreators/annot-editor": "workspace:*",
     "@ingcreators/annot-host-ui": "workspace:*",
+    "@ingcreators/annot-render": "workspace:*",
     "@ingcreators/annot-web": "workspace:*",
     "js-yaml": "^4.2.0"
   },

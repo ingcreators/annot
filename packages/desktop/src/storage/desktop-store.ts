@@ -57,6 +57,10 @@ import {
 import { defaultAnnotImageFilename } from "@ingcreators/annot-core/utils";
 import { readEditableImage } from "@ingcreators/annot-core/xmp";
 import { parseDocumentMetaCheap } from "@ingcreators/annot-doc/headless";
+// Deep subpath (not the barrel) so the storage chunk doesn't pull
+// the full rendering surface — same rationale as the pptx deep
+// imports noted in annot-render's index.ts.
+import { probeRasterDims } from "@ingcreators/annot-render/raster-dims";
 import {
   type BuildEditableImageDeps,
   buildEditableImageBlob,
@@ -95,24 +99,6 @@ function mimeForPath(path: string): string {
     : lower.endsWith(".svg")
       ? "image/svg+xml"
       : "image/jpeg";
-}
-
-/** Decode raster bytes to recover pixel dimensions. Fail-soft:
- *  returns 0×0 when decoding is unavailable (non-browser test
- *  environments) or the bytes are unparseable — callers treat
- *  that the same as "dimensions unknown". */
-async function probeRasterDims(
-  bytes: Uint8Array,
-  mime: string,
-): Promise<{ width: number; height: number }> {
-  try {
-    const bitmap = await createImageBitmap(new Blob([bytes as BlobPart], { type: mime }));
-    const dims = { width: bitmap.width, height: bitmap.height };
-    bitmap.close();
-    return dims;
-  } catch {
-    return { width: 0, height: 0 };
-  }
 }
 
 export class DesktopStore
@@ -424,7 +410,9 @@ export class DesktopStore
       // canvas svg (blank editor) since the shell sizes the canvas
       // from the record, not from the decoded bitmap. Mirrors the
       // vscode webview's raw-raster fallback.
-      const probed = meta ? null : await probeRasterDims(bytes, mimeForPath(path));
+      const probed = meta
+        ? null
+        : await probeRasterDims(new Blob([bytes as BlobPart], { type: mimeForPath(path) }));
       return {
         path,
         folderPath: getParentPath(path),
