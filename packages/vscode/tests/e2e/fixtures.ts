@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { deflateSync } from "node:zlib";
+import { cloneBuiltinTemplate, serializeStandaloneDocument } from "@ingcreators/annot-doc";
 import {
   test as base,
   type ElectronApplication,
@@ -45,7 +46,7 @@ function pngChunk(type: string, data: Uint8Array): Uint8Array {
   return out;
 }
 
-function makeTestPng(width: number, height: number): Buffer {
+export function makeTestPng(width: number, height: number): Buffer {
   const raw = new Uint8Array(height * (1 + width * 4));
   let i = 0;
   for (let y = 0; y < height; y++) {
@@ -95,12 +96,26 @@ interface VSCodeFixtures {
 }
 
 export const SAMPLE_FILE = "sample.annot.svg";
+/** A PLAIN png under the .annot.png double extension — the
+ *  "user renamed a raw screenshot" fallback path (no XMP yet). */
+export const SAMPLE_PNG_FILE = "sample.annot.png";
+/** A built-in-template document, serialized by the same
+ *  `serializeStandaloneDocument` the extension host uses. */
+export const SAMPLE_DOC_FILE = "sample.annot.html";
+
+function makeAnnotHtml(): string {
+  const doc = cloneBuiltinTemplate("procedure");
+  if (!doc) throw new Error("procedure template missing");
+  return serializeStandaloneDocument(doc);
+}
 
 export const test = base.extend<VSCodeFixtures>({
   // biome-ignore lint/correctness/noEmptyPattern: Playwright fixture signature
   workspace: async ({}, use) => {
     const ws = mkdtempSync(path.join(os.tmpdir(), "annot-vscode-e2e-"));
     writeFileSync(path.join(ws, SAMPLE_FILE), makeAnnotSvg());
+    writeFileSync(path.join(ws, SAMPLE_PNG_FILE), makeTestPng(640, 400));
+    writeFileSync(path.join(ws, SAMPLE_DOC_FILE), makeAnnotHtml());
     await use(ws);
   },
   app: async ({ workspace }, use) => {
@@ -153,13 +168,53 @@ export { expect };
  *  scan and falls back to the text editor. Opening after the
  *  workbench is up routes through the custom-editor association. */
 export async function openAnnotFile(window: Page, filename: string): Promise<FrameLocator> {
+  return openCustomEditor(window, filename, "[data-annot-shell-root]");
+}
+
+/** Open a file and wait for the Annot webview. If the dev-host's
+ *  extension scan hasn't landed the custom-editor association yet
+ *  the file opens in the plain text editor (no webview iframe at
+ *  all) — close the tab and retry instead of timing out. */
+async function openCustomEditor(
+  window: Page,
+  filename: string,
+  readySelector: string,
+): Promise<FrameLocator> {
+  const webview = window.frameLocator("iframe.webview.ready").frameLocator("#active-frame");
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await quickOpen(window, filename);
+    try {
+      await window.locator("iframe.webview.ready").first().waitFor({ timeout: 10_000 });
+    } catch {
+      // Text-editor fallback — no webview mounted. Close and retry.
+      await window.keyboard.press("Control+w");
+      await window.waitForTimeout(500);
+      continue;
+    }
+    await webview.locator(readySelector).waitFor({ timeout: 60_000 });
+    return webview;
+  }
+  throw new Error(`custom editor never engaged for ${filename} after 3 attempts`);
+}
+
+/** Quick Open a workspace file. The matching row is CLICKED, not
+ *  Enter-ed: Enter activates the focused (first) row, and while the
+ *  first-launch file index warms up — or when several similarly
+ *  named fixtures score close together — the first row may be a
+ *  different file entirely. */
+async function quickOpen(window: Page, filename: string): Promise<void> {
   await window.keyboard.press("Control+P");
   await window.keyboard.type(filename);
-  await window.locator(".quick-input-list .monaco-list-row").first().waitFor({ timeout: 10_000 });
-  await window.keyboard.press("Enter");
-  const webview = window.frameLocator("iframe.webview.ready").frameLocator("#active-frame");
-  await webview.locator("[data-annot-shell-root]").waitFor({ timeout: 60_000 });
-  return webview;
+  const row = window.locator(".quick-input-list .monaco-list-row", { hasText: filename }).first();
+  await row.waitFor({ timeout: 30_000 });
+  await row.click();
+}
+
+/** Open a `.annot.html` file via Quick Open into doc mode. Same
+ *  CLI-race caveat as `openAnnotFile`; waits for the doc shell
+ *  instead of the image canvas. */
+export async function openAnnotDoc(window: Page, filename: string): Promise<FrameLocator> {
+  return openCustomEditor(window, filename, "annot-doc-shell");
 }
 
 /** The editor canvas SVG inside the webview. The webview shell
