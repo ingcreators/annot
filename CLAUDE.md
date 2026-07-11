@@ -312,13 +312,17 @@ pnpm --filter @ingcreators/annot-web build
 pnpm --filter @ingcreators/annot-extension build
 pnpm -r build                                          # full build (uses turbo)
 pnpm --filter @ingcreators/annot-web e2e               # PWA e2e (Playwright; boots vite dev on :3000)
+pnpm --filter @ingcreators/annot-extension e2e         # extension e2e (build:dev + unpacked load in headless Chromium)
 ```
 
-The PWA e2e suite lives in `packages/web/tests/e2e/` (outside
-`src/` so the root vitest glob ignores it). First run needs
-`pnpm --filter @ingcreators/annot-web exec playwright install
-chromium`. CI runs it advisory via
-`.github/workflows/web-e2e.yml`.
+The e2e suites live in `packages/{web,extension}/tests/e2e/`
+(outside `src/` so the root vitest glob ignores them). First run
+needs `pnpm --filter <pkg> exec playwright install chromium`.
+The extension suite loads the `dist/` build unpacked via
+`launchPersistentContext` + `--load-extension` with
+`channel: "chromium"` (MV3 needs the new headless mode) and also
+boots the PWA dev server for the capture → editor handoff flow.
+CI runs both advisory via `.github/workflows/{web,ext}-e2e.yml`.
 
 Vite is the bundler for every browser-targeted package. Builds are
 fast (sub-second for `annot-web`). **Always build the changed

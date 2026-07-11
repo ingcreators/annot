@@ -1,0 +1,68 @@
+# Chrome extension e2e suite — loads the built MV3 extension
+# unpacked into headless Chromium (new headless via the full
+# Chromium build) and drives the real capture pipeline:
+# captureVisibleTab, MAIN-world ElementTree walk, offscreen encode,
+# IDBStore persistence, the capture → PWA editor handoff, and the
+# externally_connectable messaging channel.
+#
+# Advisory (`continue-on-error: true`) to start, mirroring the
+# docs-tour / web-e2e precedent.
+
+name: ext-e2e
+
+on:
+  pull_request:
+    paths:
+      - "packages/extension/**"
+      - "packages/capture/**"
+      - "packages/core/**"
+      - "packages/web/src/storage/**"
+      - "packages/web/src/app/extension-transfer-host.ts"
+      - ".github/workflows/ext-e2e.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ext-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  e2e:
+    name: Playwright e2e (packages/extension)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true # advisory — see header comment
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm --filter @ingcreators/annot-extension exec playwright install --with-deps chromium
+
+      - name: Run e2e suite
+        run: pnpm --filter @ingcreators/annot-extension e2e
+
+      - name: Upload traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-traces-extension
+          path: packages/extension/test-results/
+          retention-days: 7
+          if-no-files-found: ignore
