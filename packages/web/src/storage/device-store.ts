@@ -53,6 +53,10 @@ import {
 } from "@ingcreators/annot-core/storage";
 import { defaultAnnotImageFilename } from "@ingcreators/annot-core/utils";
 import { readEditableImage } from "@ingcreators/annot-core/xmp";
+// Deep subpath (not the barrel) so the storage chunk doesn't pull
+// the full rendering surface — same rationale as the pptx deep
+// imports noted in annot-render's index.ts.
+import { probeRasterDims } from "@ingcreators/annot-render/raster-dims";
 import { fileExists, getDirHandle, purgeEmptyFiles } from "./device-fs.js";
 import { buildEditableImageBlob } from "./image-encode.js";
 
@@ -66,21 +70,6 @@ import { buildEditableImageBlob } from "./image-encode.js";
  * to the gallery.
  */
 const LEGACY_INDEX_FILE = ".annot.json";
-
-/** Decode raster bytes to recover pixel dimensions. Fail-soft:
- *  returns 0×0 when decoding is unavailable (non-browser test
- *  environments) or the bytes are unparseable — callers treat
- *  that the same as "dimensions unknown". */
-async function probeRasterDims(blob: Blob): Promise<{ width: number; height: number }> {
-  try {
-    const bitmap = await createImageBitmap(blob);
-    const dims = { width: bitmap.width, height: bitmap.height };
-    bitmap.close();
-    return dims;
-  } catch {
-    return { width: 0, height: 0 };
-  }
-}
 
 export class DeviceStore
   implements

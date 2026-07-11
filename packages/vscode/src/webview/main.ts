@@ -75,6 +75,10 @@ import type {
 } from "@ingcreators/annot-host-ui/annot-doc-header";
 import { Toolbar } from "@ingcreators/annot-host-ui/toolbar";
 import { showConfirmDialog } from "@ingcreators/annot-host-ui/ui/dialog";
+// Deep subpath (not the barrel) so the webview bundle doesn't pull
+// the full rendering surface — same rationale as the pptx dynamic
+// import below.
+import { probeRasterDims } from "@ingcreators/annot-render/raster-dims";
 // `<annot-editor-right-panel>` registers a custom element on import.
 import "@ingcreators/annot-host-ui/right-panel";
 import { StatusHost } from "@ingcreators/annot-host-ui/orchestrators/status-host";
@@ -241,7 +245,7 @@ async function decodeRecord(
   // Probe the real pixel dimensions — a 0×0 record mounts a
   // 0×0 canvas svg (blank editor) since the shell sizes the
   // canvas from the record, not from the decoded bitmap.
-  const dims = await probeRasterDims(bytes, mime);
+  const dims = await probeRasterDims(new Blob([bytes as BlobPart], { type: mime }));
   return {
     ...base,
     originalDataUrl: dataUrl,
@@ -249,20 +253,6 @@ async function decodeRecord(
     width: dims.width,
     height: dims.height,
   };
-}
-
-async function probeRasterDims(
-  bytes: Uint8Array,
-  mime: string,
-): Promise<{ width: number; height: number }> {
-  try {
-    const bitmap = await createImageBitmap(new Blob([bytes as BlobPart], { type: mime }));
-    const dims = { width: bitmap.width, height: bitmap.height };
-    bitmap.close();
-    return dims;
-  } catch {
-    return { width: 0, height: 0 };
-  }
 }
 
 async function encodeBytesForSave(_filePath: string, filename: string): Promise<Uint8Array> {
