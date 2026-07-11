@@ -1,0 +1,66 @@
+# PWA e2e suite — drives the real app (Vite dev server + Chromium)
+# through the core user flows: gallery boot, file import, editor
+# drawing, autosave persistence, and routing deep links.
+#
+# Advisory (`continue-on-error: true`) to start, mirroring the
+# docs-tour precedent: promote to blocking after a few stable
+# release cycles once flake behaviour on shared runners is known.
+
+name: web-e2e
+
+on:
+  pull_request:
+    paths:
+      - "packages/web/**"
+      - "packages/host-ui/**"
+      - "packages/editor/**"
+      - "packages/core/**"
+      - "packages/render/**"
+      - ".github/workflows/web-e2e.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  e2e:
+    name: Playwright e2e (packages/web)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true # advisory — see header comment
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm --filter @ingcreators/annot-web exec playwright install --with-deps chromium
+
+      - name: Run e2e suite
+        run: pnpm --filter @ingcreators/annot-web e2e
+
+      - name: Upload traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-traces
+          path: packages/web/test-results/
+          retention-days: 7
+          if-no-files-found: ignore

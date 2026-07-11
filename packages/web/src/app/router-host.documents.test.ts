@@ -77,9 +77,11 @@ function makeImageOnlyStore(): StorageProvider {
 function makeDeps(storage: StorageProvider | null, overrides: Partial<RouterHostDeps> = {}) {
   const openDocFromGallery = vi.fn(async (_record: DocumentRecord) => {});
   const showGalleryView = vi.fn();
+  const setCurrentFolderPath = vi.fn();
   const deps: RouterHostDeps = {
     getStorage: () => storage,
     getCurrentFolderPath: () => "",
+    setCurrentFolderPath,
     setFileManager: () => {},
     showGalleryView,
     handleStorageSelect: async () => {},
@@ -92,7 +94,7 @@ function makeDeps(storage: StorageProvider | null, overrides: Partial<RouterHost
     notifyRouteChange: () => {},
     ...overrides,
   };
-  return { deps, openDocFromGallery, showGalleryView };
+  return { deps, openDocFromGallery, showGalleryView, setCurrentFolderPath };
 }
 
 const SAMPLE_DOC: DocumentRecord = {
@@ -180,5 +182,32 @@ describe("RouterHost: /doc dispatch", () => {
     expect(openDocFromGallery).not.toHaveBeenCalled();
     expect(showGalleryView).toHaveBeenCalled();
     expect(mocks.showError).toHaveBeenCalledWith(expect.objectContaining({ severity: "error" }));
+  });
+});
+
+describe("RouterHost: /folder deep link", () => {
+  it("seats the deep-linked folder before showing the gallery", async () => {
+    const { deps, showGalleryView, setCurrentFolderPath } = makeDeps(makeImageOnlyStore());
+    const host = new RouterHost(deps);
+
+    setHref("/folder/Screenshots/2026-07");
+    await host.handleRoute();
+
+    expect(setCurrentFolderPath).toHaveBeenCalledWith("Screenshots/2026-07");
+    expect(showGalleryView).toHaveBeenCalledTimes(1);
+    const seatOrder = setCurrentFolderPath.mock.invocationCallOrder[0] ?? 0;
+    const showOrder = showGalleryView.mock.invocationCallOrder[0] ?? 0;
+    expect(seatOrder).toBeLessThan(showOrder);
+  });
+
+  it("leaves the current folder untouched on the gallery root", async () => {
+    const { deps, showGalleryView, setCurrentFolderPath } = makeDeps(makeImageOnlyStore());
+    const host = new RouterHost(deps);
+
+    setHref("/");
+    await host.handleRoute();
+
+    expect(setCurrentFolderPath).not.toHaveBeenCalled();
+    expect(showGalleryView).toHaveBeenCalledTimes(1);
   });
 });

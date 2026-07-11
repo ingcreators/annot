@@ -32,6 +32,11 @@ import { findSessionRecords } from "./session-slice.js";
 export interface RouterHostDeps {
   getStorage(): StorageProvider | null;
   getCurrentFolderPath(): string;
+  /** Seat the gallery on a specific folder before `showGalleryView`
+   *  renders it. Used by the `/folder/<path>` deep link — without
+   *  this the gallery would open on the localStorage-restored last
+   *  folder and silently ignore the URL. */
+  setCurrentFolderPath(folderPath: string): void;
   /** The router invalidates the file manager after an extension
    *  transfer so the gallery re-reads the folder after the bulk
    *  re-home. `null` triggers the `showGalleryView` rebuild on the
@@ -203,6 +208,15 @@ export class RouterHost {
       } catch (e) {
         console.error("[handleRoute] getImage error:", e);
       }
+    }
+
+    // /folder/<path> — gallery deep-linked into a folder (see
+    // docs/url-schemes.md). Seat the folder before the gallery
+    // renders; `showGalleryView` ends with
+    // `navigateToFolder(currentFolderPath)`, which also persists
+    // the folder as the last-visited one.
+    if (route.type === "gallery" && route.path) {
+      this.deps.setCurrentFolderPath(route.path);
     }
 
     this.deps.showGalleryView();
