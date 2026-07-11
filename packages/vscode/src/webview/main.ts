@@ -184,7 +184,11 @@ function folderPathOf(filePath: string): string {
   return filePath.replace(/\\/g, "/").replace(/\/[^/]+$/, "/");
 }
 
-function decodeRecord(filePath: string, filename: string, bytes: Uint8Array): ImageRecord {
+async function decodeRecord(
+  filePath: string,
+  filename: string,
+  bytes: Uint8Array,
+): Promise<ImageRecord> {
   const ext = extOf(filename);
   const now = new Date().toISOString();
   const base: Omit<ImageRecord, "originalDataUrl" | "annotationsSvg" | "width" | "height"> = {
@@ -234,13 +238,31 @@ function decodeRecord(filePath: string, filename: string, bytes: Uint8Array): Im
 
   const mime = ext === "jpg" || ext === "jpeg" ? "image/jpeg" : "image/png";
   const dataUrl = `data:${mime};base64,${bytesToBase64(bytes)}`;
+  // Probe the real pixel dimensions — a 0×0 record mounts a
+  // 0×0 canvas svg (blank editor) since the shell sizes the
+  // canvas from the record, not from the decoded bitmap.
+  const dims = await probeRasterDims(bytes, mime);
   return {
     ...base,
     originalDataUrl: dataUrl,
     annotationsSvg: "",
-    width: 0,
-    height: 0,
+    width: dims.width,
+    height: dims.height,
   };
+}
+
+async function probeRasterDims(
+  bytes: Uint8Array,
+  mime: string,
+): Promise<{ width: number; height: number }> {
+  try {
+    const bitmap = await createImageBitmap(new Blob([bytes as BlobPart], { type: mime }));
+    const dims = { width: bitmap.width, height: bitmap.height };
+    bitmap.close();
+    return dims;
+  } catch {
+    return { width: 0, height: 0 };
+  }
 }
 
 async function encodeBytesForSave(_filePath: string, filename: string): Promise<Uint8Array> {
