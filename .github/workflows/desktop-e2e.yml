@@ -1,0 +1,68 @@
+# Desktop (Electron) e2e suite — builds the app with electron-vite,
+# launches dist-electron/main/main.js under xvfb through
+# Playwright's Electron driver against a throwaway userData
+# (ANNOT_TEST_USER_DATA_DIR seam), and drives the unified gallery +
+# editor: seeded-library listing, Upload Files… import,
+# draw → autosave → on-disk XMP round-trip, undo.
+#
+# Advisory (`continue-on-error: true`) to start, mirroring the
+# docs-tour / web-e2e / ext-e2e / vscode-e2e precedent.
+
+name: desktop-e2e
+
+on:
+  pull_request:
+    paths:
+      - "packages/desktop/**"
+      - "packages/host-ui/**"
+      - "packages/editor/**"
+      - "packages/render/**"
+      - "packages/core/**"
+      - "packages/doc/**"
+      - "packages/web/**"
+      - "packages/capture/**"
+      - ".github/workflows/desktop-e2e.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  e2e:
+    name: Playwright e2e (packages/desktop)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true # advisory — see header comment
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run e2e suite
+        run: pnpm --filter @ingcreators/annot-desktop e2e
+
+      - name: Upload traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-traces-desktop
+          path: packages/desktop/test-results/
+          retention-days: 7
+          if-no-files-found: ignore

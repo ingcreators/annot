@@ -12,7 +12,8 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "typecheck": "tsc --noEmit && tsc -p src-electron/tsconfig.json --noEmit"
+    "e2e": "pnpm build && xvfb-run -a pnpm exec playwright test",
+    "typecheck": "tsc --noEmit && tsc -p src-electron/tsconfig.json --noEmit && tsc --noEmit -p tests/e2e"
   },
   "build": {
     "appId": "com.ingcreators.annot",
@@ -104,6 +105,7 @@
     "js-yaml": "^4.2.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^26",
     "chrome-types": "^0.1.433",

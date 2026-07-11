@@ -88,6 +88,33 @@ function isDocumentFile(name: string): boolean {
   return name.toLowerCase().endsWith(".annot.html");
 }
 
+function mimeForPath(path: string): string {
+  const lower = path.toLowerCase();
+  return lower.endsWith(".png")
+    ? "image/png"
+    : lower.endsWith(".svg")
+      ? "image/svg+xml"
+      : "image/jpeg";
+}
+
+/** Decode raster bytes to recover pixel dimensions. Fail-soft:
+ *  returns 0×0 when decoding is unavailable (non-browser test
+ *  environments) or the bytes are unparseable — callers treat
+ *  that the same as "dimensions unknown". */
+async function probeRasterDims(
+  bytes: Uint8Array,
+  mime: string,
+): Promise<{ width: number; height: number }> {
+  try {
+    const bitmap = await createImageBitmap(new Blob([bytes as BlobPart], { type: mime }));
+    const dims = { width: bitmap.width, height: bitmap.height };
+    bitmap.close();
+    return dims;
+  } catch {
+    return { width: 0, height: 0 };
+  }
+}
+
 export class DesktopStore
   implements
     StorageProvider,
@@ -392,14 +419,20 @@ export class DesktopStore
       const version = String(mtime);
       const cached = await this.#c().getImage(this.#ns(), path, version);
       const createdAt = cached?.createdAt ?? new Date(mtime || Date.now()).toISOString();
+      // No XMP packet (an external image dropped into the library):
+      // probe the real pixel dimensions — a 0×0 record mounts a 0×0
+      // canvas svg (blank editor) since the shell sizes the canvas
+      // from the record, not from the decoded bitmap. Mirrors the
+      // vscode webview's raw-raster fallback.
+      const probed = meta ? null : await probeRasterDims(bytes, mimeForPath(path));
       return {
         path,
         folderPath: getParentPath(path),
         originalDataUrl: meta?.originalImageDataUrl || (await this.#bytesToDataUrl(bytes, path)),
         thumbnailDataUrl: "",
         annotationsSvg: meta?.annotationsSvg || "",
-        width: meta?.width || 0,
-        height: meta?.height || 0,
+        width: meta?.width || probed?.width || 0,
+        height: meta?.height || probed?.height || 0,
         sourceUrl: cached?.sourceUrl ?? "",
         tags: meta?.tags || {},
         createdAt,
@@ -900,13 +933,7 @@ export class DesktopStore
    * embedded XMP (i.e. an external image dropped into the library).
    */
   async #bytesToDataUrl(bytes: Uint8Array, path: string): Promise<string> {
-    const lower = path.toLowerCase();
-    const mime = lower.endsWith(".png")
-      ? "image/png"
-      : lower.endsWith(".svg")
-        ? "image/svg+xml"
-        : "image/jpeg";
-    const blob = new Blob([bytes as BlobPart], { type: mime });
+    const blob = new Blob([bytes as BlobPart], { type: mimeForPath(path) });
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onloadend = () => {
