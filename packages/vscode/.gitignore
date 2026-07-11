@@ -1,0 +1,6 @@
+# Downloaded VS Code builds for the e2e suite (@vscode/test-electron)
+.vscode-test/
+
+# Playwright e2e output
+test-results/
+playwright-report/

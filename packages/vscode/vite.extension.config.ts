@@ -14,9 +14,14 @@ import { defineConfig } from "vite";
  * separately by `vite.webview.config.ts` and ships ESM.
  *
  * `vscode` is external — the API is provided by the runtime, not
- * bundled. `@ingcreators/*` are also external; the extension-host
- * resolves them via pnpm's node_modules at runtime, mirroring how
- * the PWA resolves them via Vite's bundler at build time.
+ * bundled. `@ingcreators/*` workspace deps MUST be bundled: their
+ * package.json `exports` maps point at raw TypeScript sources
+ * (`./src/index.ts`), which the plain-Node extension host cannot
+ * load (Node's type stripping doesn't remap the `./headless.js`
+ * import specifiers back to `.ts` files). Externalizing them made
+ * `activate()` throw at require time, so the custom editor never
+ * registered and `*.annot.svg` files silently fell back to the
+ * text editor — caught by the vscode e2e suite.
  */
 export default defineConfig({
   build: {
@@ -29,7 +34,7 @@ export default defineConfig({
     emptyOutDir: false,
     target: "node18",
     rollupOptions: {
-      external: ["vscode", /^@ingcreators\//, /^node:/],
+      external: ["vscode", /^node:/],
     },
   },
 });

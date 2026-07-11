@@ -313,16 +313,24 @@ pnpm --filter @ingcreators/annot-extension build
 pnpm -r build                                          # full build (uses turbo)
 pnpm --filter @ingcreators/annot-web e2e               # PWA e2e (Playwright; boots vite dev on :3000)
 pnpm --filter @ingcreators/annot-extension e2e         # extension e2e (build:dev + unpacked load in headless Chromium)
+pnpm --filter @ingcreators/annot-vscode e2e            # vscode e2e (downloads VS Code; runs under xvfb)
 ```
 
-The e2e suites live in `packages/{web,extension}/tests/e2e/`
-(outside `src/` so the root vitest glob ignores them). First run
-needs `pnpm --filter <pkg> exec playwright install chromium`.
-The extension suite loads the `dist/` build unpacked via
+The e2e suites live in `packages/{web,extension,vscode}/tests/e2e/`
+(outside `src/` so the root vitest glob ignores them). The
+web / extension suites need
+`pnpm --filter <pkg> exec playwright install chromium` once; the
+extension suite loads the `dist/` build unpacked via
 `launchPersistentContext` + `--load-extension` with
 `channel: "chromium"` (MV3 needs the new headless mode) and also
 boots the PWA dev server for the capture → editor handoff flow.
-CI runs both advisory via `.github/workflows/{web,ext}-e2e.yml`.
+The vscode suite downloads VS Code desktop on first run
+(`@vscode/test-electron`, cached in `.vscode-test/`), launches it
+via Playwright's Electron driver under `xvfb-run`, and reaches the
+custom-editor webview through `frameLocator` (canvas is
+`[data-annot-shell-root]`, not `#svg-root`; toolbar mounts under
+`#annot-shell-toolbar`). CI runs all three advisory via
+`.github/workflows/{web,ext,vscode}-e2e.yml`.
 
 Vite is the bundler for every browser-targeted package. Builds are
 fast (sub-second for `annot-web`). **Always build the changed
