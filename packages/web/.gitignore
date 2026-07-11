@@ -3,3 +3,7 @@
 # commit SHA (CI / local) or a `dev-<timestamp>` sentinel.
 # Committing it would just produce churn on every build.
 public/version.txt
+
+# Playwright e2e output
+test-results/
+playwright-report/

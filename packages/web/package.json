@@ -17,7 +17,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tests/e2e",
+    "e2e": "playwright test",
     "icons": "node ../../brand/generate-app-icons.mjs",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build"
@@ -33,7 +34,9 @@
     "lit": "^3.3.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@resvg/resvg-js": "^2.6.2",
+    "@types/node": "^26",
     "@storybook/addon-a11y": "^10.4.6",
     "@storybook/web-components-vite": "^10.4.6",
     "chrome-types": "^0.1.433",

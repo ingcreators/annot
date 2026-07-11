@@ -288,6 +288,9 @@ export class App {
     this.#routerHost = new RouterHost({
       getStorage: () => this.#storage,
       getCurrentFolderPath: () => this.#currentFolderPath,
+      setCurrentFolderPath: (folderPath) => {
+        this.#currentFolderPath = folderPath;
+      },
       setFileManager: (fm) => {
         this.#fileManager = fm;
       },
