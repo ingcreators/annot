@@ -73,6 +73,20 @@ declare const __dirname: string;
 
 const RENDERER_DEV_URL = process.env["ELECTRON_RENDERER_URL"];
 
+/** E2e seam: redirect `userData` (and `sessionData`, so
+ *  localStorage / IndexedDB isolate too) into a per-run temp
+ *  directory. Only tests/e2e/fixtures.ts sets the variable —
+ *  normal launches never define it, so the real library is
+ *  untouched. Must run before `app.whenReady()`: the library
+ *  root + the http-server staging dirs derive from `userData`
+ *  at ready time, and Chromium opens the session storage as
+ *  soon as the first BrowserWindow constructs. */
+const TEST_USER_DATA_DIR = process.env["ANNOT_TEST_USER_DATA_DIR"];
+if (TEST_USER_DATA_DIR) {
+  app.setPath("userData", TEST_USER_DATA_DIR);
+  app.setPath("sessionData", join(TEST_USER_DATA_DIR, "session"));
+}
+
 /** CI smoke-boot mode. The release workflow's smoke step launches
  *  the packaged binary with `--smoke-test` after `electron-builder`
  *  emits it; the goal is to assert the main bundle parses + boots
