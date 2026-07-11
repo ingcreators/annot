@@ -16,7 +16,8 @@
     "package:chrome": "pnpm build:chrome && node scripts/zip-dist.mjs chrome",
     "package:edge": "pnpm build:edge && node scripts/zip-dist.mjs edge",
     "dev": "vite",
-    "typecheck": "tsc --noEmit",
+    "e2e": "pnpm build:dev && playwright test",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tests/e2e",
     "icons": "node ../../brand/generate-app-icons.mjs"
   },
   "dependencies": {
@@ -27,7 +28,9 @@
     "lit": "^3.3.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@resvg/resvg-js": "^2.6.2",
+    "@types/node": "^26",
     "@storybook/web-components-vite": "^10.4.6",
     "chrome-types": "^0.1.433",
     "typescript": "catalog:",
