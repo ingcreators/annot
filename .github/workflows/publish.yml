@@ -150,11 +150,17 @@ jobs:
 
       - name: Upgrade npm CLI to OIDC-supporting version
         # Node 24 ships with npm 10.x; Trusted Publishing needs
-        # 11.5.1+. Token auth works on any version, but we install
-        # the latest anyway so the same job handles both modes.
+        # 11.5.1+. PINNED to the npm 11 line (not @latest): the
+        # 2026-07-12 dispatch failed because npm@latest resolved to
+        # 12.0.1, whose `npm publish` error output changed shape and
+        # crashed @changesets/cli 2.31.0's isAlreadyPublishedError
+        # ("Cannot read properties of undefined (reading
+        # 'includes')") while it was classifying the already-
+        # published packages. Revisit the pin when changesets ships
+        # npm-12 error parsing.
         run: |
           set -euo pipefail
-          npm install --global npm@latest
+          npm install --global npm@11
           npm --version
 
       - name: Install dependencies
