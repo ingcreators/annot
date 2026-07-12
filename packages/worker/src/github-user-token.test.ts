@@ -86,6 +86,12 @@ describe("GET /api/github/app/connect", () => {
     expect(location.searchParams.get("client_id")).toBe("test-app-client-id");
     // GitHub Apps derive permissions from the App config — no scope param.
     expect(location.searchParams.get("scope")).toBeNull();
+    // Explicit redirect_uri: with two callback URLs registered on
+    // the App (embed setup first), GitHub's no-redirect_uri
+    // fallback would pick the wrong one.
+    expect(location.searchParams.get("redirect_uri")).toBe(
+      "http://localhost/api/github/app/callback",
+    );
     const state = location.searchParams.get("state")!;
     const stored = await kv.get(`oauth-state:github-app:${state}`);
     expect(stored).toBeTruthy();

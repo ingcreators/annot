@@ -211,9 +211,21 @@ export async function handleGithubAppConnect(c: Context<{ Bindings: Env }>): Pro
   const authorizeUrl = new URL(GITHUB_AUTHORIZE_URL);
   authorizeUrl.searchParams.set("client_id", c.env.GITHUB_APP_CLIENT_ID);
   authorizeUrl.searchParams.set("state", state);
+  // `redirect_uri` is REQUIRED here even though GitHub can fall
+  // back to the registered callback URL: the App registers TWO
+  // callback URLs (the embed manifest-flow redirect is first) and
+  // GitHub's fallback picks the FIRST one — which would land the
+  // user-authorization code on `/api/embed/setup/callback` and die
+  // in the manifest-conversion exchange. Built from the request's
+  // own origin so self-host deploys point at themselves; GitHub
+  // validates it against the registered list.
+  const reqUrl = new URL(c.req.url);
+  authorizeUrl.searchParams.set(
+    "redirect_uri",
+    `${reqUrl.protocol}//${reqUrl.host}/api/github/app/callback`,
+  );
   // No `scope` — GitHub Apps derive permissions from the App's
-  // configuration, not the authorize request. No `redirect_uri` —
-  // GitHub uses the callback URL registered on the App.
+  // configuration, not the authorize request.
   return c.redirect(authorizeUrl.toString(), 302);
 }
 
