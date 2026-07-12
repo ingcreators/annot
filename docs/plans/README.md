@@ -33,6 +33,7 @@ window (`Queued`), or actively shipping (`In progress`).
 | [`google-drive-integration.md`](./google-drive-integration.md) | Draft | Rework the Drive backend onto the non-sensitive `drive.file` scope + Workspace Marketplace + Drive UI Integration so Annot can ship publicly without a restricted-scope CASA audit. |
 | [`oss-cloud-split.md`](./oss-cloud-split.md) | Draft | Forward-looking strategy for keeping Annot OSS while developing paid features in a separate private `annot-cloud` repo. Guardrails apply from today; concrete phases trigger on "first paid feature" and "company incorporation". |
 | [`github-integration.md`](./github-integration.md) | Draft | Individual-user `GitHubStore` — device-flow auth, pick repo + branch + base path, commits as save. Drive-integration-equivalent scope. PR automation / Check Runs / org admin live in `annot-cloud`, not here. Phases 1–3 landed (#36–#38); Phase 4 polish in progress. |
+| [`github-app-user-tokens.md`](./github-app-user-tokens.md) | Queued | One-click GitHub connect for annot.work-signed-in users via GitHub App user-to-server tokens (8 h access + rotating refresh, server-side refresh in the Worker). PAT paste stays as the OSS / self-host fallback. Worker endpoints + D1 `github_user_tokens` + auth-source abstraction in `github-auth.ts` + installation-scoped repo picker. |
 
 ## Recently landed plans
 
