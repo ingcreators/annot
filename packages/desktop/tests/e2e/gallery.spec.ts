@@ -23,11 +23,15 @@ test("boots into the unified gallery listing the seeded library", async ({ windo
   await expect(window.locator("body")).not.toHaveClass(/editor-mode/);
 
   // The seeded plain PNG (no XMP yet) is listed inside Inbox —
-  // DesktopStore's raw-raster fallback. The card meta shows the
-  // file's mtime, not dimensions (the listing never decodes bytes).
+  // DesktopStore's raw-raster fallback. The listing probes the
+  // real pixel dimensions at index time (metadata-unification
+  // Phase 3), so the card meta shows dims like any annot-authored
+  // capture.
   await enterInbox(window);
-  await expect(imageCard(window, "seeded")).toBeVisible();
+  const card = imageCard(window, "seeded");
+  await expect(card).toBeVisible();
   await expect(window.locator(".gallery-item")).toHaveCount(1);
+  await expect(card.locator(".gallery-item-meta")).toContainText(/640\s*[×x]\s*400/);
 });
 
 test("Upload Files… imports a PNG to disk and opens it in the editor", async ({

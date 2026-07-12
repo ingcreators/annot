@@ -75,6 +75,24 @@ describe("DeviceStore raw-raster dimension probing", () => {
     expect(probe).toHaveBeenCalledTimes(1);
   });
 
+  it("caches probed dimensions at listing time (gallery cards show dims)", async () => {
+    const probe = vi.fn(async () => ({ width: 640, height: 400, close: () => {} }));
+    vi.stubGlobal("createImageBitmap", probe);
+
+    const { root, store } = makeStore();
+    await seedPlainFile(root, "external.png");
+
+    const listed = await store.listImages("");
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.width).toBe(640);
+    expect(listed[0]?.height).toBe(400);
+
+    // Second listing hits the cache — no re-decode for the same
+    // file version.
+    await store.listImages("");
+    expect(probe).toHaveBeenCalledTimes(1);
+  });
+
   it("fails soft to 0×0 when decoding is unavailable", async () => {
     vi.stubGlobal("createImageBitmap", () => {
       throw new Error("no decoder in this environment");

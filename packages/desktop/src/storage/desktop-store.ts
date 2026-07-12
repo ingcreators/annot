@@ -279,14 +279,20 @@ export class DesktopStore
       // back to the previous cache entry, then to the file mtime.
       const createdAt =
         meta?.createdAt || previous?.createdAt || new Date(stat?.mtime ?? Date.now()).toISOString();
+      // XMP-less external files: probe dimensions once per version
+      // so gallery cards show real dims instead of falling back to
+      // a date. Cache hits skip the decode on later listings.
+      const probed = meta
+        ? null
+        : await probeRasterDims(new Blob([bytes as BlobPart], { type: mimeForPath(path) }));
       const rec: ImageRecord = {
         path,
         folderPath: getParentPath(path),
         originalDataUrl: "",
         thumbnailDataUrl: "",
         annotationsSvg: "",
-        width: meta?.width ?? 0,
-        height: meta?.height ?? 0,
+        width: meta?.width || probed?.width || 0,
+        height: meta?.height || probed?.height || 0,
         sourceUrl: meta?.sourceUrl || previous?.sourceUrl || "",
         tags: meta?.tags ?? {},
         createdAt,
