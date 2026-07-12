@@ -36,7 +36,11 @@ import {
 } from "@ingcreators/annot-host-ui";
 import "@ingcreators/annot-host-ui/annot-scratchpad-section";
 import type { HeaderHost } from "@ingcreators/annot-host-ui/orchestrators/header-host";
-import type { SavePipeline } from "@ingcreators/annot-host-ui/orchestrators/save-pipeline";
+import {
+  SAVE_DEBOUNCE_LOCAL_MS,
+  SAVE_DEBOUNCE_NETWORKED_MS,
+  type SavePipeline,
+} from "@ingcreators/annot-host-ui/orchestrators/save-pipeline";
 import type { StatusHost } from "@ingcreators/annot-host-ui/orchestrators/status-host";
 import type { ScratchpadStore } from "../editor/scratchpad-store.js";
 import { getStorageMode } from "../storage/bridge.js";
@@ -586,7 +590,10 @@ export class EditorSession {
       // branch regardless of save frequency, so the debounce can go
       // back to parity with Drive without risking log spam.
       const mode = getStorageMode();
-      const saveDebounceMs = mode === "github" || mode === "googledrive" ? 1500 : 500;
+      const saveDebounceMs =
+        mode === "github" || mode === "googledrive"
+          ? SAVE_DEBOUNCE_NETWORKED_MS
+          : SAVE_DEBOUNCE_LOCAL_MS;
       this.savePipeline.scheduleAnnotationSave(saveDebounceMs);
       this.savePipeline.scheduleThumbnailRegen(2000);
     });
