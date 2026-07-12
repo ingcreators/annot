@@ -254,11 +254,14 @@ export function walkElementTree(regionArg: ElementTreeWalkerRegion): WalkerEleme
     return states.length > 0 ? states : undefined;
   }
 
-  // Whitelist of HTML attributes worth collecting per element. Keep
-  // narrow — the editor's Elements panel + drift detector only need
-  // a small set. Future per-role whitelisting is a Phase 2 follow-up
-  // tracked in `living-spec-authoring-roadmap.md` Phase 1 "Out of
-  // scope" notes.
+  // Whitelist of HTML attributes worth collecting per element.
+  // INLINED copy of `ELEMENT_TREE_ATTR_WHITELIST` from
+  // `@ingcreators/annot-core/element-tree` — this function body is
+  // injected via `executeScript({func})` and cannot import. The
+  // behavioural symmetry test in `element-tree-walker.test.ts`
+  // fails the build if the two lists diverge. Principle:
+  // `attributes` = element shape (HTML attributes), `states` =
+  // element state (ARIA / dynamic) — aria-* never appears here.
   const ATTR_WHITELIST = [
     "id",
     "name",
@@ -266,6 +269,16 @@ export function walkElementTree(regionArg: ElementTreeWalkerRegion): WalkerEleme
     "href",
     "placeholder",
     "value",
+    "required",
+    "disabled",
+    "readonly",
+    "checked",
+    "maxlength",
+    "minlength",
+    "pattern",
+    "min",
+    "max",
+    "step",
     "data-testid",
     "data-test-id",
   ];

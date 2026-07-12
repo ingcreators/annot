@@ -207,3 +207,38 @@ describe("walkElementTree", () => {
     expect(heading?.children?.[0]?.role).toBe("button");
   });
 });
+
+describe("attribute-whitelist symmetry with @ingcreators/annot-core/element-tree", () => {
+  beforeEach(() => {
+    document.body.innerHTML = "";
+    setViewport(1280, 800);
+  });
+
+  // The walker's ATTR_WHITELIST is an INLINED copy of the canonical
+  // ELEMENT_TREE_ATTR_WHITELIST (executeScript({func}) cannot
+  // import). This behavioural test fails when the two lists
+  // diverge: an element carrying every canonical attribute plus
+  // non-whitelisted decoys must surface exactly the canonical set.
+  it("captures exactly the canonical attribute set, no aria-* leakage", async () => {
+    const { ELEMENT_TREE_ATTR_WHITELIST } = await import("@ingcreators/annot-core/element-tree");
+
+    const input = document.createElement("input");
+    for (const attr of ELEMENT_TREE_ATTR_WHITELIST) {
+      input.setAttribute(attr, attr === "type" ? "email" : "x");
+    }
+    // Decoys: state belongs in `states`, presentation nowhere.
+    input.setAttribute("aria-checked", "true");
+    input.setAttribute("aria-disabled", "true");
+    input.setAttribute("class", "fancy");
+    input.setAttribute("style", "color: red");
+    document.body.appendChild(input);
+    stubBoundingRect(input, { x: 10, y: 10, w: 200, h: 30 });
+
+    const tree = walkElementTree(null);
+    const node = tree.root.children?.[0];
+    expect(node).toBeDefined();
+    expect(Object.keys(node?.attributes ?? {}).sort()).toEqual(
+      [...ELEMENT_TREE_ATTR_WHITELIST].sort(),
+    );
+  });
+});

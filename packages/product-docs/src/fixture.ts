@@ -29,6 +29,8 @@
 
 import { writeFile } from "node:fs/promises";
 
+import { ELEMENT_TREE_ATTR_WHITELIST } from "@ingcreators/annot-core/element-tree";
+
 import { test as annotatorTest } from "@ingcreators/annot-playwright";
 import type { Locator, Page } from "@playwright/test";
 
@@ -86,28 +88,16 @@ export type Screen = ProductDocs;
 
 /**
  * HTML attributes captured into the `annot:attributes` block by
- * default. Focused on form-control + accessibility shape — the
- * stuff a screen-specifications spreadsheet / operation manual cares about per element.
+ * default. Re-exports the canonical `ELEMENT_TREE_ATTR_WHITELIST`
+ * from `@ingcreators/annot-core/element-tree` (metadata-unification
+ * Phase 7) so every ElementTree producer — extension walker,
+ * Playwright adapter, this fixture — captures the SAME set.
+ * Note aria-* attributes are no longer captured here: state lives
+ * in `states` tokens, `attributes` carries element shape only.
  *
  * Hosts can override per-call via `opts.attributeWhitelist`.
  */
-export const DEFAULT_ATTR_WHITELIST: readonly string[] = [
-  "type",
-  "required",
-  "placeholder",
-  "maxlength",
-  "minlength",
-  "pattern",
-  "min",
-  "max",
-  "step",
-  "disabled",
-  "readonly",
-  "checked",
-  "aria-required",
-  "aria-disabled",
-  "aria-readonly",
-];
+export const DEFAULT_ATTR_WHITELIST: readonly string[] = ELEMENT_TREE_ATTR_WHITELIST;
 
 /**
  * `test = annotatorTest.extend({ productDocs })` — drop-in for
