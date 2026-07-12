@@ -237,6 +237,12 @@ async function decodeRecord(
       width: meta.width,
       height: meta.height,
       tags: meta.tags ?? {},
+      // Provenance (schema 2.0) — kept on the record so the next
+      // save writes it back instead of dropping it.
+      sourceUrl: meta.sourceUrl || "",
+      createdAt: meta.createdAt || now,
+      producer: meta.producer || undefined,
+      dpr: meta.dpr || undefined,
     };
   }
 
@@ -282,6 +288,13 @@ async function encodeBytesForSave(_filePath: string, filename: string): Promise<
     width: canvas.imageWidth,
     height: canvas.imageHeight,
     format,
+    // Write the opened record's provenance back; a plain raster
+    // that never had a packet gets stamped as vscode-authored on
+    // its first upgrade to a re-editable file.
+    sourceUrl: activeProvenance.sourceUrl,
+    createdAt: activeProvenance.createdAt,
+    producer: activeProvenance.producer || "vscode",
+    dpr: activeProvenance.dpr,
   });
   return new Uint8Array(await editable.arrayBuffer());
 }
@@ -305,6 +318,11 @@ let activeFilename = "";
 // `open` message so the file-details drawer + the future
 // "Reveal in test file" command can use it.
 let activeFilePath = "";
+// Provenance of the currently-open record (schema 2.0), captured
+// at decode time so `runSave` / export write it back instead of
+// dropping it on every re-save.
+let activeProvenance: { sourceUrl?: string; createdAt?: string; producer?: string; dpr?: number } =
+  {};
 
 const proxyStorage: StorageProvider = {
   async getImage(path: string): Promise<ImageRecord | undefined> {
@@ -316,7 +334,14 @@ const proxyStorage: StorageProvider = {
       // most recently-loaded file's bytes are what the drawer
       // surfaces.
       activeFileBytes = bytes.length;
-      return decodeRecord(path, activeFilename || path, bytes);
+      const record = await decodeRecord(path, activeFilename || path, bytes);
+      activeProvenance = {
+        sourceUrl: record.sourceUrl || undefined,
+        createdAt: record.createdAt || undefined,
+        producer: record.producer,
+        dpr: record.dpr,
+      };
+      return record;
     } catch (err) {
       console.error("[annot/vscode] getImage failed:", err);
       return undefined;
@@ -1013,6 +1038,10 @@ async function runExport(id: number, format: "png" | "jpeg" | "pptx"): Promise<v
         width: canvas.imageWidth,
         height: canvas.imageHeight,
         format: format === "jpeg" ? "jpg" : "png",
+        sourceUrl: activeProvenance.sourceUrl,
+        createdAt: activeProvenance.createdAt,
+        producer: activeProvenance.producer || "vscode",
+        dpr: activeProvenance.dpr,
       });
       bytes = new Uint8Array(await editable.arrayBuffer());
       suggestedFilename = `${safeStem}.${format === "jpeg" ? "jpg" : "png"}`;

@@ -91,6 +91,10 @@ export interface BuildEditableImageDeps {
     height: number;
     format: "jpg" | "png";
     tags: Record<string, string>;
+    sourceUrl?: string;
+    createdAt?: string;
+    producer?: string;
+    dpr?: number;
   }) => Promise<Blob>;
 }
 
@@ -166,5 +170,11 @@ export async function buildEditableImageBlob(
     height: record.height || 0,
     format,
     tags: record.tags || {},
+    // Provenance (schema 2.0) — persisted so the file, not the
+    // metadata cache, is the authority for these fields.
+    sourceUrl: record.sourceUrl || undefined,
+    createdAt: record.createdAt || undefined,
+    producer: record.producer || undefined,
+    dpr: record.dpr || undefined,
   });
 }

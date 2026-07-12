@@ -21,6 +21,16 @@ export interface ImageRecord {
   tags: Record<string, string>;
   createdAt: string;
   updatedAt: string;
+  /** What created the image: `extension` / `desktop` / `web` /
+   *  `vscode` / `annotator` / `mcp` / `playwright` / …. Persisted
+   *  as `annot:producer` in the XMP packet (schema 2.0). Empty /
+   *  undefined for records that predate 2.0. */
+  producer?: string;
+  /** `devicePixelRatio` (or display scale factor) at capture time.
+   *  Persisted as `annot:dpr` (schema 2.0). Maps device-px image
+   *  dimensions back to CSS px for sources without an ElementTree.
+   *  0 / undefined when unknown. */
+  dpr?: number;
   /** Canonical screen-capture tree captured alongside the
    *  screenshot. Source-agnostic: produced by the browser extension's
    *  MAIN-world walker, by Playwright's adapter, or by any future

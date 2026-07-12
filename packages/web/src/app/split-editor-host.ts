@@ -211,6 +211,9 @@ export class SplitEditorHost {
             folderPath: first.folderPath,
             createdAt: first.createdAt || now,
             updatedAt: now,
+            // Slices inherit the source capture's provenance.
+            producer: first.producer,
+            dpr: first.dpr,
           },
           { filename: tmpFilename },
         ),

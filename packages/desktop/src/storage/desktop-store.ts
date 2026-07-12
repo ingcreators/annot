@@ -274,7 +274,11 @@ export class DesktopStore
       const meta = readEditableImage(bytes);
       const stat = await this.#fs.stat(path);
       const previous = await this.#c().getImage(this.#ns(), path, version);
-      const createdAt = previous?.createdAt ?? new Date(stat?.mtime ?? Date.now()).toISOString();
+      // The packet is the authority for provenance (schema 2.0);
+      // the cache entry is refreshed FROM it. Pre-2.0 files fall
+      // back to the previous cache entry, then to the file mtime.
+      const createdAt =
+        meta?.createdAt || previous?.createdAt || new Date(stat?.mtime ?? Date.now()).toISOString();
       const rec: ImageRecord = {
         path,
         folderPath: getParentPath(path),
@@ -283,10 +287,12 @@ export class DesktopStore
         annotationsSvg: "",
         width: meta?.width ?? 0,
         height: meta?.height ?? 0,
-        sourceUrl: previous?.sourceUrl ?? "",
+        sourceUrl: meta?.sourceUrl || previous?.sourceUrl || "",
         tags: meta?.tags ?? {},
         createdAt,
         updatedAt: new Date(stat?.mtime ?? Date.now()).toISOString(),
+        producer: meta?.producer || undefined,
+        dpr: meta?.dpr || undefined,
       };
       await this.#cachePutImage(path, version, rec);
     } catch {
@@ -360,6 +366,10 @@ export class DesktopStore
       width: data.width,
       height: data.height,
       tags: data.tags,
+      sourceUrl: data.sourceUrl,
+      createdAt: data.createdAt,
+      producer: data.producer,
+      dpr: data.dpr,
     };
     const blob = await buildEditableImageBlob(record, isJpeg ? "jpg" : "png", this.#encodeDeps);
     const bytes = new Uint8Array(await blob.arrayBuffer());
@@ -404,7 +414,10 @@ export class DesktopStore
       const mtime = stat?.mtime ?? 0;
       const version = String(mtime);
       const cached = await this.#c().getImage(this.#ns(), path, version);
-      const createdAt = cached?.createdAt ?? new Date(mtime || Date.now()).toISOString();
+      // The packet is the authority for provenance (schema 2.0);
+      // the cache is a fallback for pre-2.0 files only.
+      const createdAt =
+        meta?.createdAt || cached?.createdAt || new Date(mtime || Date.now()).toISOString();
       // No XMP packet (an external image dropped into the library):
       // probe the real pixel dimensions — a 0×0 record mounts a 0×0
       // canvas svg (blank editor) since the shell sizes the canvas
@@ -421,10 +434,12 @@ export class DesktopStore
         annotationsSvg: meta?.annotationsSvg || "",
         width: meta?.width || probed?.width || 0,
         height: meta?.height || probed?.height || 0,
-        sourceUrl: cached?.sourceUrl ?? "",
+        sourceUrl: meta?.sourceUrl || cached?.sourceUrl || "",
         tags: meta?.tags || {},
         createdAt,
         updatedAt: new Date(mtime || Date.now()).toISOString(),
+        producer: meta?.producer || undefined,
+        dpr: meta?.dpr || undefined,
       };
     } catch {
       return undefined;

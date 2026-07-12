@@ -90,6 +90,10 @@ export async function saveImage(
     // supplied it (browser extension captures only). Editor uses this
     // for smart annotations; it's safe to omit for non-browser sources.
     ...(data.elementTree ? { elementTree: data.elementTree } : {}),
+    // Provenance (schema 2.0) — must survive the extension → PWA
+    // transfer, so it has to be persisted here first.
+    ...(data.producer ? { producer: data.producer } : {}),
+    ...(data.dpr ? { dpr: data.dpr } : {}),
   };
   const db = await openDB();
   await new Promise<void>((resolve, reject) => {

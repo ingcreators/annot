@@ -641,6 +641,7 @@ async function doCapture(mode: CaptureModeType): Promise<void> {
         dataUrl: result.data_url,
         width: result.width,
         height: result.height,
+        dpr: window.devicePixelRatio || undefined,
       });
       return;
     }
@@ -666,6 +667,7 @@ async function doCapture(mode: CaptureModeType): Promise<void> {
       dataUrl: cropped,
       width: region.w,
       height: region.h,
+      dpr: window.devicePixelRatio || undefined,
     });
   } catch (err) {
     try {
@@ -863,6 +865,12 @@ interface PersistOpts {
    *  Batch incoming sweeps set this to false for files 2..N so a
    *  single capture batch doesn't fire-hose the editor. */
   openInEditor?: boolean;
+  /** Provenance: what created the image. Defaults to `"desktop"`;
+   *  the extension-handoff sweep passes `"extension"` so handed-off
+   *  captures keep their true origin. */
+  producer?: string;
+  /** Provenance: devicePixelRatio at capture time, when known. */
+  dpr?: number;
 }
 
 /** Persist a captured / uploaded / imported data URL via
@@ -888,6 +896,8 @@ async function persistViaDesktopStore(opts: PersistOpts): Promise<string | null>
       tags: {},
       createdAt: now,
       updatedAt: now,
+      producer: opts.producer ?? "desktop",
+      dpr: opts.dpr,
     },
     opts.filename ? { filename: opts.filename } : undefined,
   );
@@ -979,6 +989,9 @@ async function processIncomingFs(): Promise<void> {
         sourceUrl: cap.source_url,
         folderPath: "Inbox",
         openInEditor: i === 0,
+        // The staged capture came from the browser extension via the
+        // HTTP / Native Messaging handoff — keep its true origin.
+        producer: "extension",
       });
     } catch (e) {
       console.error("[desktop] processIncoming entry failed:", e);

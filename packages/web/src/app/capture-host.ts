@@ -329,11 +329,15 @@ export class CaptureHost {
         annotationsSvg: annotations,
         width: w,
         height: h,
-        sourceUrl: "",
+        // An uploaded re-editable file carries its own provenance —
+        // preserve it; a plain image starts fresh as a web import.
+        sourceUrl: meta?.sourceUrl || "",
         tags,
         folderPath: this.deps.getCurrentFolderPath(),
-        createdAt: now,
+        createdAt: meta?.createdAt || now,
         updatedAt: now,
+        producer: meta?.producer || "web",
+        dpr: meta?.dpr || undefined,
       },
       { filename: file.name || undefined },
     );
@@ -370,6 +374,7 @@ export class CaptureHost {
       folderPath: this.deps.getCurrentFolderPath(),
       createdAt: now,
       updatedAt: now,
+      producer: "web",
     });
     await this.deps.getThumbnailManager()?.write(storage, path, thumbnailDataUrl, {
       width: img.naturalWidth,
@@ -447,6 +452,9 @@ export class CaptureHost {
       folderPath,
       createdAt: now,
       updatedAt: now,
+      producer: "web",
+      // Screen captures render at the display's pixel density.
+      dpr: window.devicePixelRatio || undefined,
     });
     await this.deps.getThumbnailManager()?.write(storage, path, thumbnailDataUrl, {
       width: img.naturalWidth,
@@ -501,6 +509,9 @@ export class CaptureHost {
       folderPath,
       createdAt: now,
       updatedAt: now,
+      producer: "web",
+      // Screen captures render at the display's pixel density.
+      dpr: window.devicePixelRatio || undefined,
     });
     await this.deps.getThumbnailManager()?.write(storage, path, thumbnailDataUrl, {
       width: img.naturalWidth,
