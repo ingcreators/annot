@@ -13,12 +13,6 @@
  *     persists the captures via `DesktopStore` and never has to
  *     touch the filesystem itself.
  *
- *   - `extension.legacyDataInfo()` → returns whether the legacy
- *     Tauri-era SQLite database exists at
- *     `<portable_dir>/data/annot.db`, plus the absolute path the
- *     renderer's "Open old folder" button passes to
- *     `shell.openPath`. Surfaces the one-time legacy-data toast
- *     without giving the renderer raw fs access.
  *
  * Pre-Phase 9 the renderer reached into the filesystem directly
  * via `@tauri-apps/plugin-fs`; that runtime dep is dropped, so
@@ -56,22 +50,8 @@ export interface DrainedCapture {
   data_url: string;
 }
 
-export interface LegacyDataInfo {
-  /** Whether `<portable_dir>/data/annot.db` exists. The Tauri-era
-   *  SQLite gallery wrote its image-index there; surfacing the
-   *  toast on first launch under Electron lets the user know
-   *  their old data is still on disk (if it is) without auto-
-   *  importing it. */
-  exists: boolean;
-  /** Absolute path to `<portable_dir>/data/`. The renderer
-   *  passes this to `shell.openPath` for the "Open old folder"
-   *  button. */
-  path: string;
-}
-
 export interface ExtensionHandlers {
   drainIncoming(): Promise<DrainedCapture[]>;
-  legacyDataInfo(): Promise<LegacyDataInfo>;
 }
 
 export interface ExtensionDeps {
@@ -82,8 +62,6 @@ export interface ExtensionDeps {
 
 export function createExtensionHandlers(deps: ExtensionDeps): ExtensionHandlers {
   const incomingDir = join(deps.userDataDir, "data", "incoming");
-  const legacyDataDir = join(deps.userDataDir, "data");
-  const legacyDbPath = join(legacyDataDir, "annot.db");
 
   return {
     async drainIncoming() {
@@ -135,17 +113,6 @@ export function createExtensionHandlers(deps: ExtensionDeps): ExtensionHandlers 
 
       return out;
     },
-
-    async legacyDataInfo() {
-      let exists = false;
-      try {
-        await fs.access(legacyDbPath);
-        exists = true;
-      } catch {
-        /* missing — exists stays false */
-      }
-      return { exists, path: legacyDataDir };
-    },
   };
 }
 
@@ -168,12 +135,10 @@ function isEnoent(err: unknown): boolean {
 
 export const EXTENSION_CHANNELS = {
   drainIncoming: "extension.drainIncoming",
-  legacyDataInfo: "extension.legacyDataInfo",
 } as const;
 
 export type ExtensionChannel = (typeof EXTENSION_CHANNELS)[keyof typeof EXTENSION_CHANNELS];
 
 export const EXTENSION_CHANNEL_TO_HANDLER: Record<ExtensionChannel, keyof ExtensionHandlers> = {
   [EXTENSION_CHANNELS.drainIncoming]: "drainIncoming",
-  [EXTENSION_CHANNELS.legacyDataInfo]: "legacyDataInfo",
 };

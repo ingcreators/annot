@@ -60,29 +60,6 @@ function api(): ElectronApi | null {
 
 let fsGallery: DesktopGalleryHandle | null = null;
 
-/** localStorage key for the one-time legacy-data notice dismissal
- *  flag. Set to `"1"` once the user closes the toast. The notice
- *  itself is the last surface that mentions
- *  `<portable_dir>/data/`; no other Phase 5+ code path touches the
- *  legacy SQLite directory. */
-const LEGACY_NOTICE_KEY = "annotLegacyDataNoticeDismissed";
-
-function legacyNoticeAlreadyDismissed(): boolean {
-  try {
-    return window.localStorage.getItem(LEGACY_NOTICE_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function dismissLegacyNotice(): void {
-  try {
-    window.localStorage.setItem(LEGACY_NOTICE_KEY, "1");
-  } catch {
-    /* ignore */
-  }
-}
-
 // =============================================================
 // Editor session — one open image at a time.
 // =============================================================
@@ -521,8 +498,8 @@ async function backToGallery(folderPath: string): Promise<void> {
 }
 
 // =============================================================
-// Editor error banner (Decision: reuse `.fs-legacy-notice`-style
-// chrome scoped under #editor-error-banner — see app.css).
+// Editor error banner (self-contained chrome scoped under
+// #editor-error-banner — see app.css).
 // =============================================================
 
 function surfaceEditorError(label: string, err: unknown): void {
@@ -712,9 +689,10 @@ function cropImage(
  * in Phase 5 of `docs/plans/_done/desktop-storage-provider-migration.md`.
  *
  * The legacy `<portable_dir>/data/` directory (SQLite db, captured
- * thumbnails) stays untouched on disk — the one-time
- * `maybeShowLegacyDataNotice` toast is the only mention this app
- * ever surfaces. The user owns the back-up / delete decision.
+ * thumbnails) stays untouched on disk; Annot never reads or
+ * mentions it (the one-time notice was removed in
+ * metadata-unification Phase 5). The user owns the back-up /
+ * delete decision.
  */
 async function init(): Promise<void> {
   fsGallery = await bootstrapDesktopFsGallery({
@@ -816,9 +794,6 @@ async function init(): Promise<void> {
     // `extension.drainIncoming` IPC and persists each capture
     // through `DesktopStore.saveImage` (lands in `Inbox/`).
     void startIncomingListener();
-    // One-time toast surfacing the legacy SQLite directory's path
-    // for users upgrading from the pre-Electron build.
-    void maybeShowLegacyDataNotice();
   }
 
   // Document-level paste listener: covers Ctrl+V / Cmd+V from
@@ -997,81 +972,6 @@ async function processIncomingFs(): Promise<void> {
       console.error("[desktop] processIncoming entry failed:", e);
     }
   }
-}
-
-/**
- * Surface a one-time banner explaining where the legacy SQLite
- * data lives. Shown on Electron-mode boot when
- * `<portable_dir>/data/annot.db` exists (= the user has prior
- * SQLite captures) AND the dismissal flag isn't set.
- *
- * Phase 9 of `desktop-electron-migration.md` moved the
- * existence check into the `extension.legacyDataInfo` IPC — the
- * renderer doesn't touch the filesystem directly. The Reveal
- * button calls `shell.openPath` (also IPC) for the OS file-
- * manager open. It does NOT delete the legacy directory — the
- * user owns that decision.
- */
-async function maybeShowLegacyDataNotice(): Promise<void> {
-  if (legacyNoticeAlreadyDismissed()) return;
-  const ipc = api();
-  if (!ipc) return;
-  let info: { exists: boolean; path: string };
-  try {
-    info = await ipc.invoke<{ exists: boolean; path: string }>("extension.legacyDataInfo");
-  } catch {
-    return;
-  }
-  if (!info.exists) return;
-  renderLegacyDataNotice(info.path);
-}
-
-function renderLegacyDataNotice(legacyDataDir: string): void {
-  const galleryRoot = document.getElementById("desktop-shell");
-  if (!galleryRoot) return;
-
-  // Avoid double-rendering if the function gets called twice
-  // (e.g. polling fired before init finished).
-  if (document.getElementById("fs-legacy-data-notice")) return;
-
-  const banner = document.createElement("div");
-  banner.id = "fs-legacy-data-notice";
-  banner.className = "fs-legacy-notice";
-  banner.setAttribute("role", "status");
-  banner.innerHTML = `
-    <div class="fs-legacy-notice-body">
-      <strong>Your previous Annot library has moved.</strong>
-      The active library is now at <code>&lt;userData&gt;/library/</code>;
-      the previous data lives at <code class="fs-legacy-notice-path"></code>.
-      Back it up or remove it at your convenience — Annot won't touch it.
-    </div>
-    <div class="fs-legacy-notice-actions">
-      <button class="action-btn" id="fs-legacy-notice-reveal">Open old folder</button>
-      <button class="action-btn" id="fs-legacy-notice-dismiss">Dismiss</button>
-    </div>
-  `;
-  banner.querySelector(".fs-legacy-notice-path")!.textContent = legacyDataDir;
-  galleryRoot.insertBefore(banner, galleryRoot.firstChild);
-
-  banner.querySelector("#fs-legacy-notice-reveal")!.addEventListener("click", async () => {
-    const ipc = api();
-    if (!ipc) return;
-    try {
-      const result = await ipc.invoke<{ ok: boolean; error?: string }>("shell.openPath", {
-        path: legacyDataDir,
-      });
-      if (!result.ok) {
-        console.error("[desktop] reveal legacy data dir failed:", result.error);
-      }
-    } catch (e) {
-      console.error("[desktop] reveal legacy data dir failed:", e);
-    }
-  });
-
-  banner.querySelector("#fs-legacy-notice-dismiss")!.addEventListener("click", () => {
-    dismissLegacyNotice();
-    banner.remove();
-  });
 }
 
 void init();
