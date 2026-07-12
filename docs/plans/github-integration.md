@@ -79,6 +79,17 @@ The proper one-click OAuth experience lands on the commercial
 `annot-cloud` side, where we're running a backend anyway. See
 `oss-cloud-split.md` for the split.
 
+> **2026-07 update:** the one-click path now exists. Users signed
+> in to annot.work can connect via GitHub App **user-to-server
+> tokens** — the Worker runs the authorize flow + server-side
+> refresh grants, and the PWA sources its bearer token from
+> `GET /api/github/token` (see
+> [`_done/github-app-user-tokens.md`](./_done/github-app-user-tokens.md)).
+> Scope is installation ∩ user permissions (fine-grained-PAT
+> equivalent), browser-side tokens live 8 hours. The PAT paste
+> path below remains the default for self-hosted / static deploys
+> and the fallback everywhere.
+
 **Fine-grained PAT — what we actually use.** GitHub's
 fine-grained personal access tokens (GA since March 2025)
 scope a token to specific repositories with specific
