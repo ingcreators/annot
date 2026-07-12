@@ -216,11 +216,38 @@ function showChoiceDialog(): Promise<ReconfigureChoice | null> {
 
 // ---- One-click connect via annot.work (GitHub App) ----
 
-/** Whether the one-click path is worth offering: the user has
- *  connected Annot Cloud before (persisted base URL), or this is
- *  the hosted deploy where the same-origin Worker exists. */
+/**
+ * Whether the one-click path is worth offering. The token endpoint
+ * is cookie-authenticated with SameSite=Lax and the Worker serves
+ * no CORS headers, so the flow can only ever complete when the
+ * cloud API is SAME-ORIGIN with the PWA — that's a security
+ * posture (an open CORS token endpoint would hand GitHub write
+ * tokens to any site the user visits while signed in), not a gap.
+ *
+ * Offer the button when:
+ *   - a persisted cloud base URL points at THIS origin ("" = the
+ *     same-origin default the hosted connect dialog saves), or
+ *   - no cloud connection exists yet but the deploy is one of the
+ *     hosted `annot.work` origins (prod / staging), where the
+ *     same-origin `/api/*` route binding exists.
+ *
+ * A self-hosted PWA whose cloud base URL points at a DIFFERENT
+ * origin gets no button — the fetch would only die in CORS.
+ * Self-hosters running their own same-origin Worker + GitHub App
+ * pass the first branch with base "".
+ */
 function cloudConnectAvailable(): boolean {
-  return loadCloudBaseUrl() !== null || location.hostname === "annot.work";
+  const base = loadCloudBaseUrl();
+  if (base !== null) {
+    if (base === "") return true;
+    try {
+      return new URL(base).origin === location.origin;
+    } catch {
+      return false;
+    }
+  }
+  const host = location.hostname;
+  return host === "annot.work" || host.endsWith(".annot.work");
 }
 
 type CloudConnectOutcome =

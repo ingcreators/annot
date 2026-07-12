@@ -161,6 +161,15 @@ wrangler r2 bucket create annot-objects-staging
 2. Register **staging OAuth callbacks**: add
    `https://staging.annot.work/api/auth/github/callback` +
    `…/google/callback` to the OAuth apps (or new staging apps).
+   If staging reuses the **prod GitHub App** (item 3), also add
+   `https://staging.annot.work/api/github/app/callback` to the
+   App's callback URLs — the one-click GitHub connect
+   (`_done/github-app-user-tokens.md`) sends an explicit
+   `redirect_uri` built from the request origin, and GitHub
+   rejects the authorize call when that URL isn't registered.
+   A staging-specific App instead registers both of its own
+   staging URLs (setup + user-authorization callback; the
+   `/api/embed/setup` manifest carries both automatically).
 3. Set staging secrets:
    `wrangler secret put GITHUB_OAUTH_CLIENT_ID --env staging`
    (+ secret, Google pair, GitHub App five). Reuse prod values or
