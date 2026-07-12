@@ -14,7 +14,7 @@ import { join } from "node:path";
 import type { Page } from "@playwright/test";
 import { describe, expect, it } from "vitest";
 
-import { captureScreen, collectAttributesYaml, syncProductDocs } from "./fixture.js";
+import { collectAttributesYaml, syncProductDocs } from "./fixture.js";
 import type { OverlaySpec } from "./types.js";
 
 const FIXTURE_MDX = `---
@@ -220,14 +220,5 @@ describe("syncProductDocs", () => {
     // One snapshot block, one attributes block — not stacked.
     expect(updated.match(/annot:snapshot/g)).toHaveLength(1);
     expect(updated.match(/annot:attributes/g)).toHaveLength(1);
-  });
-});
-
-describe("deprecated `captureScreen` alias", () => {
-  it("is reference-equal to `syncProductDocs` (gradual-migration friendly)", () => {
-    // The Phase 3 rename keeps `captureScreen` as a back-compat
-    // re-export. Reference equality matters when external callers
-    // identity-check the function across the rename boundary.
-    expect(captureScreen).toBe(syncProductDocs);
   });
 });

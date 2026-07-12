@@ -1,6 +1,6 @@
 {
   "name": "@ingcreators/annot-product-docs-astro",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Astro integration for `@ingcreators/annot-product-docs`. Wires the MDX components (`<Screen>` / `<Overlay>` / `<Transition>` / `<HistoryEntry>` / `<ScreenList>` / `<TransitionGraph>`) into an Astro site and supplies the Image Service that renders annotated PNGs from `<Screen>` blocks at build time. Phase 2 of docs/plans/living-product-docs.md.",
   "license": "Apache-2.0",
   "author": "ingcreators",
@@ -30,7 +30,6 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./playwright": "./src/playwright/index.ts",
     "./components/Screen.astro": "./src/components/Screen.astro",
     "./components/Overlay.astro": "./src/components/Overlay.astro",
     "./components/AnnotCallout.astro": "./src/components/AnnotCallout.astro",
@@ -56,10 +55,6 @@
       ".": {
         "types": "./dist/index.d.ts",
         "default": "./dist/index.js"
-      },
-      "./playwright": {
-        "types": "./dist/playwright/index.d.ts",
-        "default": "./dist/playwright/index.js"
       },
       "./components/Screen.astro": "./dist/components/Screen.astro",
       "./components/Overlay.astro": "./dist/components/Overlay.astro",

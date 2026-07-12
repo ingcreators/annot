@@ -1,4 +1,4 @@
-import { test } from "@ingcreators/annot-product-docs-astro/playwright";
+import { test } from "@ingcreators/annot-product-docs";
 
 import { capture } from "./tour-helpers.js";
 

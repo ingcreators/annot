@@ -163,10 +163,9 @@ packages/
                 (`productDocs.sync({ id, mdxPath })`) that
                 re-syncs `annot:snapshot` + `annot:attributes`
                 comment blocks in place via the byte-stable
-                `updateCommentBlocks` rewriter (old `screen` /
-                `capture` / `captureScreen` names kept as
-                deprecated back-compat aliases since Phase 3 of
-                `_done/playwright-screenshot-fixture-relayer.md`);
+                `updateCommentBlocks` rewriter (the old `screen` /
+                `capture` / `captureScreen` back-compat aliases
+                were removed in 0.5.0);
                 MDX-aware resolver registered into annot-playwright's
                 `annotSourceResolvers` registry so `page.screenshot({
                 annot: { mdx: { id, path } } })` bundles the
@@ -184,7 +183,7 @@ packages/
                 base design + `docs/plans/_done/playwright-screenshot-fixture-relayer.md`
                 for the MDX hook + rename.
                 npm name: @ingcreators/annot-product-docs
-                (published 2026-05-21; current 0.4.1)
+                (published 2026-05-21; current 0.5.0, unpublished)
   product-docs-astro/ Astro 5.x / 6.x integration for the docs
                 core. Tier B-render — `productDocsIntegration()`
                 factory consumers drop into `astro.config.mjs`;
@@ -203,18 +202,17 @@ packages/
                 when the snapshot lacks bbox data — the docs
                 site still builds before the Playwright tour
                 has run. The `/playwright` subpath that
-                previously housed the screenshot fixture is now
-                a deprecated re-export (Phase 4 of
+                previously housed the screenshot fixture (a
+                deprecated re-export since Phase 4 of
                 `_done/playwright-screenshot-fixture-relayer.md`)
-                pointing at `@ingcreators/annot-product-docs`
-                + `@ingcreators/annot-playwright`; it emits a
-                `DeprecationWarning` at import time and will be
-                removed in 0.5.0. `@playwright/test` is no
+                was removed in 0.5.0 — import from
+                `@ingcreators/annot-product-docs` or
+                `@ingcreators/annot-playwright` instead. `@playwright/test` is no
                 longer a peer dep. See
                 `docs/plans/_done/living-product-docs.md` Phase 2
                 + `docs/plans/_done/playwright-screenshot-fixture-relayer.md`.
                 npm name: @ingcreators/annot-product-docs-astro
-                (published 2026-05-21; current 0.4.0)
+                (published 2026-05-21; current 0.5.0, unpublished)
   product-docs-xlsx/ Excel adapter for the docs core. Tier A —
                 walks MDX bundles, dispatches per `xlsx.role`
                 to the default no-template layout (cover /

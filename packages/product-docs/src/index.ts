@@ -79,15 +79,8 @@ export {
 export type {
   ProductDocs,
   ProductDocsSyncOptions,
-  // Deprecated back-compat aliases (Phase 3 of the relayer plan):
-  // re-exported by the same names that shipped in 0.2.x. Removal
-  // is scheduled for the deprecation window noted in
-  // `living-spec-authoring-roadmap.md` OQ-08.
-  Screen,
-  ScreenCaptureOptions,
 } from "./fixture.js";
 export {
-  captureScreen,
   collectAttributesYaml,
   DEFAULT_ATTR_WHITELIST,
   syncProductDocs,

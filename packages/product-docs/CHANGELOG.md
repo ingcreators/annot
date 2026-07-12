@@ -1,5 +1,17 @@
 # @ingcreators/annot-product-docs
 
+## 0.5.0
+
+### Minor Changes
+
+- **Breaking:** removed the deprecated Phase-3 back-compat aliases
+  (`Screen`, `ScreenCaptureOptions`, `captureScreen`, and the
+  `screen` fixture with its `.capture()` method), per the
+  deprecation window announced in the 0.3.x rename. Migrate to
+  `ProductDocs` / `ProductDocsSyncOptions` / `syncProductDocs` /
+  the `productDocs` fixture's `.sync()` — same behaviour, new
+  names only.
+
 ## 0.4.1
 
 ### Patch Changes
