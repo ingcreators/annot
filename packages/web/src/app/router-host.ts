@@ -16,6 +16,7 @@
 
 import type { DocumentRecord, ImageRecord, StorageProvider } from "@ingcreators/annot-core/storage";
 import { supportsDocuments } from "@ingcreators/annot-core/storage";
+import { normalizeAnnotImageFilename } from "@ingcreators/annot-core/utils";
 import type { FileManager } from "@ingcreators/annot-host-ui/gallery/file-manager";
 import { logger } from "../logger.js";
 import { editUrl, galleryUrl, parseRoute, pushRoute, sessionEditUrl } from "../router.js";
@@ -184,17 +185,28 @@ export class RouterHost {
         // Try direct lookup first
         let record = await storage.getImage(route.path);
         // If the route came from the extension and a bulk-transfer just ran,
-        // the image was re-homed into the current folder — look it up there.
-        const folderPath = this.deps.getCurrentFolderPath();
-        if (!record && transferred && folderPath) {
+        // the image was re-homed into the current folder — look it up
+        // there. The transfer's `saveImage` normalizes bare extension
+        // filenames to the `.annot.<ext>` double extension
+        // (metadata-unification Phase 4), so the normalized name is
+        // the primary candidate; the verbatim name stays as a
+        // fallback for already-normalized paths.
+        if (!record && transferred) {
+          const folderPath = this.deps.getCurrentFolderPath();
           const filename = route.path.includes("/")
             ? route.path.slice(route.path.lastIndexOf("/") + 1)
             : route.path;
-          const candidate = `${folderPath}/${filename}`;
-          record = await storage.getImage(candidate);
-          if (record) {
-            // Fix up the URL so it matches the actual stored path
-            pushRoute(editUrl(getStorageMode(), record.path));
+          const inFolder = (name: string) => (folderPath ? `${folderPath}/${name}` : name);
+          for (const candidate of [
+            inFolder(normalizeAnnotImageFilename(filename)),
+            inFolder(filename),
+          ]) {
+            record = await storage.getImage(candidate);
+            if (record) {
+              // Fix up the URL so it matches the actual stored path
+              pushRoute(editUrl(getStorageMode(), record.path));
+              break;
+            }
           }
         }
         if (record?.originalDataUrl) {
