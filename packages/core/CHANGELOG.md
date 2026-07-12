@@ -1,5 +1,25 @@
 # @ingcreators/annot-core
 
+## 0.4.0
+
+### Minor Changes
+
+- Ship the metadata-unification surface to npm. The published 0.3.1
+  dist predates the whole track, so registry consumers were missing:
+  - XMP schema 2.0 — `buildXmp` restructured to an options object
+    (**breaking** for direct callers) with first-class provenance
+    fields (`sourceUrl` / `createdAt` / `producer` / `dpr`,
+    `XmpProvenance`), `ANNOT_XMP_VERSION = "2.0"`, XML-escaped
+    free-text fields, and `AnnotMetadata` gaining `version` +
+    provenance on the read side.
+  - `ELEMENT_TREE_ATTR_WHITELIST` in `/element-tree` — the canonical
+    attribute whitelist `@ingcreators/annot-product-docs@0.5.0`
+    imports (its registry install crashed with "does not provide an
+    export named 'ELEMENT_TREE_ATTR_WHITELIST'" until this release).
+  - SVG provenance helpers in `/editor/svg-format`
+    (`writeSvgProvenanceAttrs` / `readSvgProvenanceAttrs` /
+    `SVG_PROVENANCE_ATTRS`).
+
 ## 0.3.1
 
 ### Patch Changes

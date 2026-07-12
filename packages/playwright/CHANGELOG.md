@@ -1,5 +1,21 @@
 # @ingcreators/annot-playwright
 
+## 0.5.0
+
+### Minor Changes
+
+- Editable screenshots (`page.screenshot({ annot: { … } })`) now
+  stamp schema-2.0 provenance into the XMP packet: the page URL as
+  `annot:sourceUrl`, the capture moment as `annot:createdAt`, and
+  `annot:producer = "playwright"`.
+
+### Patch Changes
+
+- Updated dependencies
+- Updated dependencies
+  - @ingcreators/annot-annotator@0.7.0
+  - @ingcreators/annot-core@0.4.0
+
 ## 0.4.2
 
 ### Patch Changes

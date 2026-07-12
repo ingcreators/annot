@@ -1,5 +1,12 @@
 # @ingcreators/annot-docs-site
 
+## 0.0.7
+
+### Patch Changes
+
+- @ingcreators/annot-product-docs@0.5.1
+- @ingcreators/annot-product-docs-astro@0.5.1
+
 ## 0.0.6
 
 ### Patch Changes

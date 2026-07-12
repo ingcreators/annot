@@ -1,5 +1,15 @@
 # @ingcreators/annot-annotator
 
+## 0.7.0
+
+### Minor Changes
+
+- `toEditablePng`'s `EditableInput` gains the schema-2.0 provenance
+  fields (`sourceUrl` / `createdAt` / `producer` / `dpr`), written
+  into the XMP packet as first-class elements. `producer` defaults
+  to `"annotator"`. Prefer these over the old `WELL_KNOWN_TAG_KEYS`
+  smuggling convention (`source` / `capturedAt` tags).
+
 ## 0.6.0
 
 ### Minor Changes
