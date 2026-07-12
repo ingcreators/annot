@@ -87,7 +87,11 @@ export function imageCard(page: Page, title: string): Locator {
 /** Import a PNG through the sidebar "New → Upload Files…" flow —
  *  the same transient `<input type=file>` a real user drives. The
  *  input never attaches to the DOM, so the file arrives via the
- *  filechooser event rather than `setInputFiles` on a locator. */
+ *  filechooser event rather than `setInputFiles` on a locator.
+ *
+ *  A single-image import opens the editor (2026-07-12 unified
+ *  post-import UX); this helper returns to the gallery afterwards
+ *  so gallery-level tests keep their frame of reference. */
 export async function uploadTestImage(page: Page, name = "sample.png"): Promise<void> {
   const chooser = page.waitForEvent("filechooser");
   await page.locator("button.sidebar-new-btn").click();
@@ -97,7 +101,24 @@ export async function uploadTestImage(page: Page, name = "sample.png"): Promise<
     mimeType: "image/png",
     buffer: makeTestPng(),
   });
+  await expect(page.locator("body")).toHaveClass(/editor-mode/);
+  await page.locator(".editor-header-brand").click();
+  await expect(page.locator("body")).not.toHaveClass(/editor-mode/);
   await expect(imageCard(page, name.replace(/\.[^.]+$/, ""))).toBeVisible();
+}
+
+/** Import SEVERAL PNGs in one filechooser batch. Multi-file
+ *  imports stay on the gallery (no editor auto-open). */
+export async function uploadTestImages(page: Page, names: string[]): Promise<void> {
+  const chooser = page.waitForEvent("filechooser");
+  await page.locator("button.sidebar-new-btn").click();
+  await page.locator("button.new-menu-item", { hasText: "Upload Files…" }).click();
+  await (await chooser).setFiles(
+    names.map((name) => ({ name, mimeType: "image/png", buffer: makeTestPng() })),
+  );
+  for (const name of names) {
+    await expect(imageCard(page, name.replace(/\.[^.]+$/, ""))).toBeVisible();
+  }
 }
 
 /** Open a gallery image into the editor by double-click (the
@@ -108,11 +129,20 @@ export async function openImageInEditor(page: Page, title: string): Promise<void
   await expect(page.locator("#svg-root image")).toBeVisible();
 }
 
-/** Upload a fresh image and open it — the standard editor-test setup. */
+/** Upload a fresh image and land in the editor — the standard
+ *  editor-test setup. Rides the single-image auto-open directly. */
 export async function setupEditorWithImage(page: Page, name = "sample.png"): Promise<void> {
   await gotoGallery(page);
-  await uploadTestImage(page, name);
-  await openImageInEditor(page, name.replace(/\.[^.]+$/, ""));
+  const chooser = page.waitForEvent("filechooser");
+  await page.locator("button.sidebar-new-btn").click();
+  await page.locator("button.new-menu-item", { hasText: "Upload Files…" }).click();
+  await (await chooser).setFiles({
+    name,
+    mimeType: "image/png",
+    buffer: makeTestPng(),
+  });
+  await expect(page.locator("body")).toHaveClass(/editor-mode/);
+  await expect(page.locator("#svg-root image")).toBeVisible();
 }
 
 /** Open the per-card actions menu (`…` button) and click an item. */

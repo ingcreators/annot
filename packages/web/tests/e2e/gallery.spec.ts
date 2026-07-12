@@ -1,5 +1,12 @@
 import { expect, test } from "@playwright/test";
-import { clickCardMenuItem, gotoGallery, imageCard, uploadTestImage } from "./helpers.js";
+import {
+  clickCardMenuItem,
+  gotoGallery,
+  imageCard,
+  makeTestPng,
+  uploadTestImage,
+  uploadTestImages,
+} from "./helpers.js";
 
 // Gallery / file-manager UX: boot, import, rename, delete, search,
 // folders. Each test runs in a fresh browser context, so IndexedDB
@@ -125,4 +132,30 @@ test("a /folder/<path> deep link opens the gallery scoped to that folder", async
 
   await expect(page.locator("annot-gallery-page")).toBeVisible();
   await expect(page.locator(".breadcrumb-item.active")).toHaveText("shots");
+});
+
+test("a single-image upload opens the editor; a multi-file batch stays in the gallery", async ({
+  page,
+}) => {
+  await gotoGallery(page);
+
+  // Single image → straight into the editor (unified post-import
+  // UX, 2026-07-12 product decision).
+  const single = page.waitForEvent("filechooser");
+  await page.locator("button.sidebar-new-btn").click();
+  await page.locator("button.new-menu-item", { hasText: "Upload Files…" }).click();
+  await (await single).setFiles({
+    name: "solo.png",
+    mimeType: "image/png",
+    buffer: makeTestPng(),
+  });
+  await expect(page.locator("body")).toHaveClass(/editor-mode/);
+  await expect(page.locator("#svg-root image")).toBeVisible();
+  await page.locator(".editor-header-brand").click();
+  await expect(page.locator("body")).not.toHaveClass(/editor-mode/);
+
+  // Multi-file batch → import silently, stay on the gallery.
+  await uploadTestImages(page, ["batch-a.png", "batch-b.png"]);
+  await expect(page.locator("body")).not.toHaveClass(/editor-mode/);
+  await expect(page.locator(".gallery-item")).toHaveCount(3);
 });
