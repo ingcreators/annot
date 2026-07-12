@@ -71,3 +71,28 @@ export function defaultAnnotImageFilename(
   const ext = originalDataUrl.startsWith("data:image/jpeg") ? "jpg" : "png";
   return `${defaultAnnotFilenameStem(date)}.annot.${ext}`;
 }
+
+/**
+ * Normalize a caller-supplied image filename to the `.annot.<ext>`
+ * double extension — the single identity rule for Annot-managed
+ * files (`docs/plans/metadata-unification.md` Phase 4): a file the
+ * gallery manages carries BOTH the `.annot.` infix AND the XMP
+ * packet, so every host (including the vscode custom editor, which
+ * claims `*.annot.{svg,png,jpeg,jpg}` only) recognizes it.
+ *
+ * `uploaded.png` → `uploaded.annot.png`; already-normalized names
+ * pass through unchanged; the extension is lowercased. A name with
+ * no recognizable raster/svg extension gets `.annot.png` appended
+ * (production callers always pass one — this is the safe fallback).
+ *
+ * Persistent stores apply this in `saveImage`; the extension's
+ * transient IDB staging deliberately does not (see
+ * {@link defaultAnnotImageFilename}'s note — pre-annotation
+ * captures aren't annot-native yet).
+ */
+export function normalizeAnnotImageFilename(filename: string): string {
+  if (/\.annot\.(png|jpe?g|svg)$/i.test(filename)) return filename;
+  const m = filename.match(/\.(png|jpe?g|svg)$/i);
+  if (m?.[1]) return `${filename.slice(0, -m[0].length)}.annot.${m[1].toLowerCase()}`;
+  return `${filename}.annot.png`;
+}

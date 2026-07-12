@@ -83,17 +83,17 @@ describe("DesktopStore × MetadataCache — legacy sidecar is ignored", () => {
       ),
     );
 
-    await store.saveImage(makePayload(), { filename: "real.png" });
+    await store.saveImage(makePayload(), { filename: "real.annot.png" });
     await store.init();
 
     const list = await store.listImages("");
-    expect(list.map((r) => r.path).sort()).toEqual(["real.png"]);
+    expect(list.map((r) => r.path).sort()).toEqual(["real.annot.png"]);
   });
 
   it("save / update do not regenerate `.annot.json` on disk", async () => {
     const { fs, store } = buildStore();
-    await store.saveImage(makePayload(), { filename: "x.png" });
-    await store.updateImage("x.png", { tags: { source: "test" } });
+    await store.saveImage(makePayload(), { filename: "x.annot.png" });
+    await store.updateImage("x.annot.png", { tags: { source: "test" } });
     const entries = await fs.readDir("");
     expect(entries.find((e) => e.name === ".annot.json")).toBeUndefined();
   });

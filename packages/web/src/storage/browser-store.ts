@@ -26,7 +26,10 @@ import {
   uniquifyFilenameAsync,
   validateName,
 } from "@ingcreators/annot-core/storage";
-import { defaultAnnotImageFilename } from "@ingcreators/annot-core/utils";
+import {
+  defaultAnnotImageFilename,
+  normalizeAnnotImageFilename,
+} from "@ingcreators/annot-core/utils";
 
 const DB_NAME = "annot";
 // v3: add the `documents` store while preserving the v2
@@ -95,7 +98,9 @@ export class BrowserStore
     // Callers that already have a filename (drag-and-drop, extension
     // transfer preserving the user's capture name, etc.) pass it
     // through and their original name wins.
-    const filename = opts?.filename || defaultAnnotImageFilename(data.originalDataUrl);
+    const filename = opts?.filename
+      ? normalizeAnnotImageFilename(opts.filename)
+      : defaultAnnotImageFilename(data.originalDataUrl);
     validateName(filename);
     const folderPath = data.folderPath || "";
 

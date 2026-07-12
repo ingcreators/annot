@@ -4,6 +4,7 @@ import {
   defaultAnnotFilenameStem,
   defaultAnnotImageFilename,
   formatLocalTimestamp,
+  normalizeAnnotImageFilename,
 } from "./filename.js";
 
 describe("formatLocalTimestamp", () => {
@@ -50,5 +51,31 @@ describe("defaultAnnotImageFilename", () => {
     expect(defaultAnnotImageFilename("data:image/webp;base64,AAAA", d)).toBe(
       "annot-20260428-143022-123.annot.png",
     );
+  });
+});
+
+describe("normalizeAnnotImageFilename", () => {
+  it("inserts the .annot. infix before a plain raster extension", () => {
+    expect(normalizeAnnotImageFilename("uploaded.png")).toBe("uploaded.annot.png");
+    expect(normalizeAnnotImageFilename("photo.jpg")).toBe("photo.annot.jpg");
+    expect(normalizeAnnotImageFilename("photo.jpeg")).toBe("photo.annot.jpeg");
+    expect(normalizeAnnotImageFilename("diagram.svg")).toBe("diagram.annot.svg");
+  });
+
+  it("passes already-normalized names through unchanged", () => {
+    expect(normalizeAnnotImageFilename("shot.annot.png")).toBe("shot.annot.png");
+    expect(normalizeAnnotImageFilename("shot.annot.jpg")).toBe("shot.annot.jpg");
+  });
+
+  it("lowercases the extension while normalizing", () => {
+    expect(normalizeAnnotImageFilename("Screen.PNG")).toBe("Screen.annot.png");
+  });
+
+  it("appends .annot.png when no recognizable extension exists", () => {
+    expect(normalizeAnnotImageFilename("mystery")).toBe("mystery.annot.png");
+  });
+
+  it("keeps dot-bearing stems intact", () => {
+    expect(normalizeAnnotImageFilename("v1.2-final.png")).toBe("v1.2-final.annot.png");
   });
 });
