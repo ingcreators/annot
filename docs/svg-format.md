@@ -47,6 +47,7 @@ annotation changes were made.
 | `data-annot-version` | **Yes**  | Integer, current `1`. Consumers validate and migrate. |
 | `viewBox`            | Yes      | Screenshot dimensions in CSS pixels.            |
 | `width` / `height`   | Yes      | Match `viewBox` (simplifies host layout).       |
+| `data-annot-source-url` / `data-annot-created-at` / `data-annot-producer` / `data-annot-dpr` | No | Provenance on standalone `.annot.svg` files — parity with the raster XMP packet's schema-2.0 fields (see [`metadata-format.md`](./metadata-format.md)). Additive; readers ignore unknown attributes, so no version bump. Helpers: `writeSvgProvenanceAttrs` / `readSvgProvenanceAttrs` in `annot-core/editor/svg-format`. |
 
 **Missing `data-annot-version`** is treated as version `0` — the
 pre-versioning format. Readers attempt best-effort parsing and, on

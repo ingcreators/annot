@@ -58,6 +58,9 @@ test("drawing marks the document dirty and Ctrl+S bakes it into the file", async
   expect(saved).toContain('data-annot-version="1"');
   expect(saved).toContain("<rect");
   expect(saved).toContain("data:image/png;base64,");
+  // Provenance parity with the raster XMP packet: a standalone
+  // .annot.svg written by the vscode host stamps its producer.
+  expect(saved).toContain('data-annot-producer="vscode"');
 });
 
 test("undo removes the drawn shape inside the webview", async ({ window }) => {

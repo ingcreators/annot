@@ -18,6 +18,7 @@ see [`element-tree.md`](./element-tree.md).
 |---|---|---|---|
 | PNG | `iTXt` chunk, keyword `XML:com.adobe.xmp` | custom `svGo` chunk | `iTXt` chunk, keyword `annot:elementTree` (deflate YAML) |
 | JPEG | APP1 segment (`http://ns.adobe.com/xap/1.0/`) | APP2 segments, prefix `annot:OriginalImage\0` | — |
+| SVG (standalone `.annot.svg`) | provenance only, as `data-annot-source-url` / `data-annot-created-at` / `data-annot-producer` / `data-annot-dpr` root attributes (`svg-format.ts` helpers) | inline `<image href="data:...">` | — |
 
 All carriers coexist with the image's normal pixel data — viewers
 that don't know the custom chunks/segments display the rendered
