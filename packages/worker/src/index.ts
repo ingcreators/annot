@@ -69,6 +69,14 @@ import { handleEmbedHealth, handleEmbedSetupPage } from "./embed/routes.js";
 import { handleEmbedSetupCallback } from "./embed/setup-callback.js";
 import { handleEmbedWebhook } from "./embed/webhook.js";
 import {
+  handleGithubAppCallback,
+  handleGithubAppConnect,
+  handleGithubAppMeta,
+  handleGithubAppSuccess,
+  handleGithubTokenDelete,
+  handleGithubTokenGet,
+} from "./github-user-token.js";
+import {
   handleImageAnnotationsGet,
   handleImageAnnotationsPatch,
   handleImageAnnotationsYamlGet,
@@ -298,6 +306,20 @@ app.post("/api/auth/logout", handleAuthLogout);
 // to `window.opener` so the PWA's cloud-connect dialog can resolve
 // immediately, then `window.close()`s the popup.
 app.get("/api/auth/success", handleAuthSuccess);
+
+// ─── GitHub App user-to-server tokens ────────────────────────
+// One-click GitHub connect for the PWA's GitHubStore
+// (docs/plans/github-app-user-tokens.md Phase 1). `connect` /
+// `callback` run the App's user-authorization flow in a popup;
+// `/api/github/token` hands the PWA a currently-valid access
+// token, running the refresh grant server-side so the refresh
+// token never leaves the Worker.
+app.get("/api/github/app/connect", handleGithubAppConnect);
+app.get("/api/github/app/callback", handleGithubAppCallback);
+app.get("/api/github/app/success", handleGithubAppSuccess);
+app.get("/api/github/app/meta", handleGithubAppMeta);
+app.get("/api/github/token", handleGithubTokenGet);
+app.delete("/api/github/token", handleGithubTokenDelete);
 
 // ─── Images (AnnotCloudStore) ────────────────────────────────
 app.post("/api/images", handleImageUpload);

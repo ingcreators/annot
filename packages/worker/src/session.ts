@@ -166,17 +166,30 @@ export async function deleteSession(kv: KVNamespace, token: string): Promise<voi
 }
 
 /**
+ * OAuth flows that mint CSRF state. `github` / `google` are the
+ * sign-in flows; `github-app` is the GitHub App user-authorization
+ * flow (github-app-user-tokens plan).
+ */
+export type OAuthStateProvider = "github" | "google" | "github-app";
+
+/**
  * Store an OAuth CSRF state token in KV with a short TTL.
  * Returns the token to embed in the GitHub authorize URL.
+ *
+ * `payload` optionally binds the state to a caller-chosen value
+ * (the `github-app` flow stores the initiating `userId` so the
+ * callback can reject a state minted under a different session —
+ * the classic OAuth login-CSRF defence).
  */
 export async function createOAuthState(
   kv: KVNamespace,
-  provider: "github" | "google",
+  provider: OAuthStateProvider,
+  payload?: string,
 ): Promise<string> {
   const token = randomToken();
   await kv.put(
     `oauth-state:${provider}:${token}`,
-    JSON.stringify({ createdAt: new Date().toISOString() }),
+    JSON.stringify({ createdAt: new Date().toISOString(), payload }),
     { expirationTtl: OAUTH_STATE_TTL_SECONDS },
   );
   return token;
@@ -192,12 +205,31 @@ export async function createOAuthState(
  */
 export async function consumeOAuthState(
   kv: KVNamespace,
-  provider: "github" | "google",
+  provider: OAuthStateProvider,
   token: string,
 ): Promise<boolean> {
+  const { ok } = await consumeOAuthStatePayload(kv, provider, token);
+  return ok;
+}
+
+/**
+ * Like `consumeOAuthState`, but also returns the payload the
+ * state was created with (or null when the creator passed none).
+ * Same single-use semantics.
+ */
+export async function consumeOAuthStatePayload(
+  kv: KVNamespace,
+  provider: OAuthStateProvider,
+  token: string,
+): Promise<{ ok: boolean; payload: string | null }> {
   const key = `oauth-state:${provider}:${token}`;
   const value = await kv.get(key);
-  if (value === null) return false;
+  if (value === null) return { ok: false, payload: null };
   await kv.delete(key);
-  return true;
+  try {
+    const parsed = JSON.parse(value) as { payload?: string };
+    return { ok: true, payload: typeof parsed.payload === "string" ? parsed.payload : null };
+  } catch {
+    return { ok: true, payload: null };
+  }
 }
