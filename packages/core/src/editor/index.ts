@@ -47,7 +47,11 @@ export {
   ANNOT_SVG_VERSION_UNSTAMPED,
   getAnnotVersionFromString,
   readAnnotVersion,
+  readSvgProvenanceAttrs,
+  SVG_PROVENANCE_ATTRS,
+  type SvgProvenance,
   stampAnnotVersion,
+  writeSvgProvenanceAttrs,
 } from "./svg-format.js";
 export {
   svgAnnotationsToShapes,

@@ -47,6 +47,10 @@
 
 import { buildZip } from "@ingcreators/annot-core";
 import {
+  readSvgProvenanceAttrs,
+  writeSvgProvenanceAttrs,
+} from "@ingcreators/annot-core/editor/svg-format";
+import {
   type AnnotMetadata,
   createEditableImage,
   readEditableImage,
@@ -208,6 +212,11 @@ async function decodeRecord(
   if (ext === "svg") {
     const svg = new TextDecoder().decode(bytes);
     const dims = parseSvgDims(svg);
+    // Provenance round-trip (schema-2.0 parity with the raster
+    // XMP packet): read the data-annot-* root attributes so the
+    // next save writes them back instead of dropping them.
+    const provRoot = new DOMParser().parseFromString(svg, "image/svg+xml").documentElement;
+    const prov = readSvgProvenanceAttrs(provRoot);
     return {
       ...base,
       // The base screenshot must be carried on the record:
@@ -219,6 +228,10 @@ async function decodeRecord(
       annotationsSvg: svg,
       width: dims.width,
       height: dims.height,
+      sourceUrl: prov.sourceUrl,
+      createdAt: prov.createdAt || now,
+      producer: prov.producer || undefined,
+      dpr: prov.dpr || undefined,
     };
   }
 
@@ -267,7 +280,22 @@ async function encodeBytesForSave(_filePath: string, filename: string): Promise<
   if (!canvas) throw new Error("encodeBytesForSave: no canvas mounted");
 
   if (ext === "svg") {
-    return new TextEncoder().encode(exportSVGString(canvas));
+    // Standalone .annot.svg carries the same provenance the raster
+    // formats persist in XMP (data-annot-* root attributes —
+    // docs/metadata-format.md "Carriers"). Parse → stamp →
+    // re-serialize keeps exportSVGString itself provenance-free
+    // (its other callers embed the SVG inside an XMP packet, where
+    // the packet is the carrier).
+    const svgString = exportSVGString(canvas);
+    const doc = new DOMParser().parseFromString(svgString, "image/svg+xml");
+    const root = doc.documentElement;
+    writeSvgProvenanceAttrs(root, {
+      sourceUrl: activeProvenance.sourceUrl,
+      createdAt: activeProvenance.createdAt,
+      producer: activeProvenance.producer || "vscode",
+      dpr: activeProvenance.dpr,
+    });
+    return new TextEncoder().encode(new XMLSerializer().serializeToString(root));
   }
 
   // Raster: render the canvas to a PNG blob, recover the

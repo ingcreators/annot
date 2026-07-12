@@ -80,3 +80,60 @@ export function getAnnotVersionFromString(svgString: string): string {
   // Capture group 1 is always present on a successful match.
   return m ? m[1]! : ANNOT_SVG_VERSION_UNSTAMPED;
 }
+
+// ── Provenance attributes (schema parity with XMP 2.0) ─────────────
+//
+// Standalone `.annot.svg` files carry the same provenance the raster
+// formats persist in their XMP packet (`docs/metadata-format.md`):
+// sourceUrl / createdAt / producer / dpr, as `data-annot-*` root
+// attributes. Additive — readers ignore unknown attributes, so this
+// needs no `data-annot-version` bump (bumps are reserved for changes
+// that alter how existing content is interpreted).
+
+/** Root-attribute names for the four provenance fields. */
+export const SVG_PROVENANCE_ATTRS = {
+  sourceUrl: "data-annot-source-url",
+  createdAt: "data-annot-created-at",
+  producer: "data-annot-producer",
+  dpr: "data-annot-dpr",
+} as const;
+
+/** Provenance shape mirrored from `XmpProvenance` (annot-core/xmp). */
+export interface SvgProvenance {
+  sourceUrl?: string;
+  createdAt?: string;
+  producer?: string;
+  dpr?: number;
+}
+
+/**
+ * Write the provenance fields onto an SVG root element. Unset
+ * fields REMOVE their attribute so a re-save never leaves stale
+ * values behind. Call right before serializing a standalone
+ * `.annot.svg` — records embedded inside a raster's XMP packet
+ * don't need it (the packet itself is the carrier there).
+ */
+export function writeSvgProvenanceAttrs(root: Element, prov: SvgProvenance): void {
+  const set = (attr: string, value: string | undefined) => {
+    if (value) root.setAttribute(attr, value);
+    else root.removeAttribute(attr);
+  };
+  set(SVG_PROVENANCE_ATTRS.sourceUrl, prov.sourceUrl);
+  set(SVG_PROVENANCE_ATTRS.createdAt, prov.createdAt);
+  set(SVG_PROVENANCE_ATTRS.producer, prov.producer);
+  set(SVG_PROVENANCE_ATTRS.dpr, prov.dpr && prov.dpr > 0 ? String(prov.dpr) : undefined);
+}
+
+/**
+ * Read the provenance fields back from an SVG root element.
+ * Missing attributes default to `""` / `0`, matching
+ * `AnnotMetadata`'s defensive-reader contract.
+ */
+export function readSvgProvenanceAttrs(root: Element): Required<SvgProvenance> {
+  return {
+    sourceUrl: root.getAttribute(SVG_PROVENANCE_ATTRS.sourceUrl) ?? "",
+    createdAt: root.getAttribute(SVG_PROVENANCE_ATTRS.createdAt) ?? "",
+    producer: root.getAttribute(SVG_PROVENANCE_ATTRS.producer) ?? "",
+    dpr: Number.parseFloat(root.getAttribute(SVG_PROVENANCE_ATTRS.dpr) ?? "0") || 0,
+  };
+}
