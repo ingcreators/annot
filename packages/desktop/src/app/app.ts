@@ -750,17 +750,25 @@ async function init(): Promise<void> {
       const input = document.createElement("input");
       input.type = "file";
       input.accept = "image/*";
+      // Unified post-import navigation (2026-07-12 product
+      // decision, PWA parity): a single image opens straight into
+      // the editor; multi-file batches import silently and stay on
+      // the gallery.
+      input.multiple = true;
       input.onchange = async () => {
-        const file = input.files?.[0];
-        if (!file) return;
-        const dataUrl = await blobToDataUrl(file);
-        const img = await loadImage(dataUrl);
-        await persistViaDesktopStore({
-          dataUrl,
-          width: img.naturalWidth,
-          height: img.naturalHeight,
-          filename: file.name,
-        });
+        const files = Array.from(input.files ?? []);
+        if (files.length === 0) return;
+        for (const file of files) {
+          const dataUrl = await blobToDataUrl(file);
+          const img = await loadImage(dataUrl);
+          await persistViaDesktopStore({
+            dataUrl,
+            width: img.naturalWidth,
+            height: img.naturalHeight,
+            filename: file.name,
+            openInEditor: files.length === 1,
+          });
+        }
       };
       input.click();
     },

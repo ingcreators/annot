@@ -171,9 +171,13 @@ export class CaptureHost {
    * manager's drag-drop overlay. Saves every file to the active
    * storage under the current folder, surfaces progress + an
    * end-of-batch summary via the error bar, and refreshes the file
-   * manager so the new files appear in the gallery. The editor is
-   * NOT opened — even a single-file import keeps the user on the
-   * file manager.
+   * manager so the new files appear in the gallery.
+   *
+   * Post-import navigation (unified across hosts, 2026-07-12
+   * product decision — see `_done/metadata-unification.md` "out of
+   * scope" follow-ups): a SINGLE successfully-imported image opens
+   * straight into the editor ("annotate this now" intent); multi-
+   * file batches and documents stay on the file manager.
    */
   async importFiles(files: File[]): Promise<void> {
     const storage = this.deps.getStorage();
@@ -240,6 +244,24 @@ export class CaptureHost {
 
     hideError();
     await this.deps.getFileManager()?.refresh(folderPath);
+
+    // Single-image import → open the editor (see the method doc).
+    const first = results[0];
+    if (files.length === 1 && first?.kind === "image" && first.path) {
+      const record = await storage.getImage(first.path);
+      if (record) {
+        this.deps.openEditor({
+          path: record.path,
+          dataUrl: record.originalDataUrl,
+          width: record.width,
+          height: record.height,
+          tags: record.tags,
+          annotations: record.annotationsSvg || undefined,
+          filename: first.file.name || undefined,
+        });
+        return;
+      }
+    }
 
     // End-of-batch summary. Quiet on full success — the user sees the
     // new files appear in the gallery. Warn / error on partial /
