@@ -18,9 +18,11 @@ import { clearHandle, loadHandle, saveHandle } from "./fs-handle-store.js";
 import {
   clearRepoRef as clearGitHubRef,
   type GitHubRepoRef,
+  getAuthSource as getGitHubAuthSource,
   getAccessToken as getGitHubToken,
   signOut as githubSignOut,
   loadRepoRef as loadGitHubRef,
+  refreshCloudTokenSilently,
 } from "./github-auth.js";
 import { GitHubStore } from "./github-store.js";
 import { getAccessToken, loadDriveRoot, signIn } from "./google-auth.js";
@@ -430,17 +432,35 @@ export function restoreGoogleDrive(): StorageProvider | null {
 }
 
 /**
- * Refresh the GitHub PAT when the current one 401s. Unlike Drive
- * there's no silent refresh — the user has to paste a new PAT. The
- * callback surfaces the auth banner; clicking "Sign in" lazy-loads
- * `github-setup-ui.ts` and opens the PAT dialog. Returns the new
- * token, or `null` if the user dismissed the banner.
+ * Refresh the GitHub token when the current one 401s.
+ *
+ * Cloud-sourced tokens (GitHub App user-to-server, minted via
+ * annot.work) refresh silently first: the Worker's
+ * `GET /api/github/token` runs the refresh-token grant server-side,
+ * so an 8-hour rollover never interrupts the user. Only when that
+ * fails (cloud session gone, App authorization revoked, network
+ * down) does the flow fall through to the banner.
+ *
+ * PAT-sourced tokens have no silent path — the user has to paste a
+ * new PAT. The callback surfaces the auth banner; clicking
+ * "Sign in" lazy-loads `github-setup-ui.ts` and opens the connect
+ * dialog. Returns the new token, or `null` if the user dismissed
+ * the banner.
  *
  * Registered on every `GitHubStore` instance so the underlying
  * `#fetch` auto-retries on 401 without every call site bolting on
  * its own handler.
  */
 async function refreshGithubToken(): Promise<string | null> {
+  if (getGitHubAuthSource() === "cloud") {
+    const token = await refreshCloudTokenSilently(loadCloudBaseUrl() ?? "");
+    if (token) {
+      registry.githubStore?.setToken(token);
+      return token;
+    }
+    // Fall through to the banner — reconnecting (or switching to a
+    // PAT) needs a user gesture from here.
+  }
   return new Promise<string | null>((resolve) => {
     let settled = false;
     const settle = (token: string | null) => {
