@@ -27,6 +27,7 @@
 | [`PRODUCT_DIRECTION.md`](./PRODUCT_DIRECTION.md) | Strategic north star + principles |
 | [`CLAUDE.md`](./CLAUDE.md) (this file) | Operational guidance for Claude Code |
 | [`docs/svg-format.md`](./docs/svg-format.md) | Canonical SVG annotation format reference |
+| [`docs/metadata-format.md`](./docs/metadata-format.md) | Canonical XMP packet reference (schema 2.0 fields, carriers, precedence rules) |
 | [`docs/url-schemes.md`](./docs/url-schemes.md) | Web routes + reserved `annot://` scheme |
 | [`docs/design-system.md`](./docs/design-system.md) | Design tokens, theme switching, user-override API |
 | [`docs/plugin-api/icons.md`](./docs/plugin-api/icons.md) | Plugin-author guide for `IconSpec` + the host icon registry |

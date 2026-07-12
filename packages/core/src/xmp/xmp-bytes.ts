@@ -22,25 +22,72 @@ const XMP_APP1_PREFIX = new TextEncoder().encode("http://ns.adobe.com/xap/1.0/\0
 const ANNOT_APP2_PREFIX = new TextEncoder().encode("annot:OriginalImage\0");
 const PNG_XMP_KEYWORD = new TextEncoder().encode("XML:com.adobe.xmp");
 
+/** Schema version written into `<annot:version>`. History lives in
+ *  `docs/metadata-format.md`. 2.0 added the first-class provenance
+ *  fields (`sourceUrl` / `createdAt` / `producer` / `dpr`) per
+ *  `docs/plans/metadata-unification.md`. */
+export const ANNOT_XMP_VERSION = "2.0";
+
 // ─── XMP XML ────────────────────────────────────────────────────────
 
-export function buildXmp(
-  annotationsSvg: string,
-  width: number,
-  height: number,
-  tags?: Record<string, string>,
-): string {
-  const tagsJson = tags && Object.keys(tags).length > 0 ? JSON.stringify(tags) : "";
-  const tagsLine = tagsJson ? `\n      <${XMP_NS}:tags>${tagsJson}</${XMP_NS}:tags>` : "";
+/** Escape a free-text value for embedding as XML element text.
+ *  The annotations SVG stays CDATA-wrapped; every other text field
+ *  (tags JSON, provenance strings) goes through this. */
+function escapeXmlText(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function unescapeXmlText(s: string): string {
+  return s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+}
+
+/**
+ * Capture provenance persisted in the XMP packet since schema 2.0.
+ * All optional — omitted fields emit no element, and readers
+ * default them to `""` / `0`. See `docs/metadata-format.md`.
+ */
+export interface XmpProvenance {
+  /** URL of the page the capture came from. Empty / omitted for
+   *  non-page sources (desktop screen capture, paste, upload). */
+  sourceUrl?: string;
+  /** ISO timestamp of the capture / import moment. NOT the file
+   *  mtime — copies and syncs must not rewrite it. */
+  createdAt?: string;
+  /** What created the file: `extension` / `desktop` / `web` /
+   *  `vscode` / `annotator` / `mcp` / `playwright` / … */
+  producer?: string;
+  /** `window.devicePixelRatio` (or display scale factor) at capture
+   *  time. Maps device-pixel image dimensions back to CSS px for
+   *  sources that never produce an ElementTree. */
+  dpr?: number;
+}
+
+export interface BuildXmpOptions extends XmpProvenance {
+  annotationsSvg: string;
+  width: number;
+  height: number;
+  tags?: Record<string, string>;
+}
+
+export function buildXmp(opts: BuildXmpOptions): string {
+  const lines: string[] = [];
+  const push = (tag: string, value: string) =>
+    lines.push(`\n      <${XMP_NS}:${tag}>${value}</${XMP_NS}:${tag}>`);
+  const tagsJson = opts.tags && Object.keys(opts.tags).length > 0 ? JSON.stringify(opts.tags) : "";
+  if (tagsJson) push("tags", escapeXmlText(tagsJson));
+  if (opts.sourceUrl) push("sourceUrl", escapeXmlText(opts.sourceUrl));
+  if (opts.createdAt) push("createdAt", escapeXmlText(opts.createdAt));
+  if (opts.producer) push("producer", escapeXmlText(opts.producer));
+  if (opts.dpr && opts.dpr > 0) push("dpr", String(opts.dpr));
   return `<?xpacket begin="﻿" id="W5M0MpCehiHzreSzNTczkc9d"?>
 <x:xmpmeta xmlns:x="adobe:ns:meta/">
   <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
     <rdf:Description rdf:about=""
       xmlns:${XMP_NS}="${XMP_NS_URI}">
-      <${XMP_NS}:annotations><![CDATA[${annotationsSvg}]]></${XMP_NS}:annotations>
-      <${XMP_NS}:width>${width}</${XMP_NS}:width>
-      <${XMP_NS}:height>${height}</${XMP_NS}:height>
-      <${XMP_NS}:version>1.0</${XMP_NS}:version>${tagsLine}
+      <${XMP_NS}:annotations><![CDATA[${opts.annotationsSvg}]]></${XMP_NS}:annotations>
+      <${XMP_NS}:width>${opts.width}</${XMP_NS}:width>
+      <${XMP_NS}:height>${opts.height}</${XMP_NS}:height>
+      <${XMP_NS}:version>${ANNOT_XMP_VERSION}</${XMP_NS}:version>${lines.join("")}
     </rdf:Description>
   </rdf:RDF>
 </x:xmpmeta>
@@ -281,7 +328,7 @@ export function writePngWithMetadata(
  * own reader) can extract the `tags` for downstream consumption.
  */
 export function buildXmpTagsOnly(tags: Record<string, string>): string {
-  const tagsJson = JSON.stringify(tags);
+  const tagsJson = escapeXmlText(JSON.stringify(tags));
   return `<?xpacket begin="﻿" id="W5M0MpCehiHzreSzNTczkc9d"?>
 <x:xmpmeta xmlns:x="adobe:ns:meta/">
   <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
@@ -336,7 +383,7 @@ export function writePngWithTagsOnly(
  */
 export const WELL_KNOWN_TAG_KEYS = ["source", "screen", "capturedAt", "commit"] as const;
 
-export interface CreateEditablePngBytesOptions {
+export interface CreateEditablePngBytesOptions extends XmpProvenance {
   /** Rasterised PNG bytes — the visible image, with annotations already
    *  baked into the pixels. */
   renderedPng: Uint8Array;
@@ -366,7 +413,7 @@ export interface CreateEditablePngBytesOptions {
  * know about the custom chunks display the rasterised pixels verbatim.
  */
 export function createEditablePngBytes(opts: CreateEditablePngBytesOptions): Uint8Array {
-  const xmpXml = buildXmp(opts.annotationsSvg, opts.width, opts.height, opts.tags);
+  const xmpXml = buildXmp(opts);
   const xmpBytes = new TextEncoder().encode(xmpXml);
   const originalBytes =
     typeof opts.originalImage === "string"
@@ -390,6 +437,15 @@ export interface AnnotMetadata {
   /** Opaque kv tags. Empty object when the XMP carried no `<annot:tags>`
    *  element or the embedded JSON was malformed. */
   tags: Record<string, string>;
+  /** Schema version the packet was written with (`<annot:version>`).
+   *  Empty string for packets that predate version emission. */
+  version: string;
+  /** Capture provenance (schema 2.0). Empty string / 0 when the
+   *  packet doesn't carry the field. */
+  sourceUrl: string;
+  createdAt: string;
+  producer: string;
+  dpr: number;
 }
 
 /**
@@ -459,13 +515,30 @@ function parseXmpToMetadata(xmp: string, originalBytes: Uint8Array | null): Anno
   const tagsStr = extractTag(xmp, "tags");
   if (tagsStr) {
     try {
-      tags = JSON.parse(tagsStr);
+      tags = JSON.parse(unescapeXmlText(tagsStr));
     } catch {
       /* invalid JSON, ignore */
     }
   }
 
-  return { originalImageDataUrl, annotationsSvg, width, height, tags };
+  const version = extractTag(xmp, "version") || "";
+  const sourceUrl = unescapeXmlText(extractTag(xmp, "sourceUrl") || "");
+  const createdAt = unescapeXmlText(extractTag(xmp, "createdAt") || "");
+  const producer = unescapeXmlText(extractTag(xmp, "producer") || "");
+  const dpr = Number.parseFloat(extractTag(xmp, "dpr") || "0") || 0;
+
+  return {
+    originalImageDataUrl,
+    annotationsSvg,
+    width,
+    height,
+    tags,
+    version,
+    sourceUrl,
+    createdAt,
+    producer,
+    dpr,
+  };
 }
 
 function extractTag(xml: string, tag: string): string | null {

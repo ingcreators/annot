@@ -220,6 +220,78 @@ describe("readEditableImage — dual-format dispatch", () => {
   });
 });
 
+describe("schema 2.0 provenance fields", () => {
+  const annotationsSvg = "<g><rect/></g>";
+
+  it("round-trips sourceUrl / createdAt / producer / dpr and reports the version", () => {
+    const out = createEditablePngBytes({
+      renderedPng: tinyPng,
+      originalImage: tinyPng,
+      annotationsSvg,
+      width: 10,
+      height: 20,
+      sourceUrl: "https://example.com/pricing?plan=pro&ref=nav",
+      createdAt: "2026-07-12T01:23:45.000Z",
+      producer: "extension",
+      dpr: 2,
+    });
+    const meta = readEditablePngBytes(out);
+    expect(meta).not.toBeNull();
+    expect(meta!.version).toBe("2.0");
+    expect(meta!.sourceUrl).toBe("https://example.com/pricing?plan=pro&ref=nav");
+    expect(meta!.createdAt).toBe("2026-07-12T01:23:45.000Z");
+    expect(meta!.producer).toBe("extension");
+    expect(meta!.dpr).toBe(2);
+  });
+
+  it("defaults absent provenance fields to empty string / 0", () => {
+    const out = createEditablePngBytes({
+      renderedPng: tinyPng,
+      originalImage: tinyPng,
+      annotationsSvg,
+      width: 1,
+      height: 1,
+    });
+    const meta = readEditablePngBytes(out);
+    expect(meta!.sourceUrl).toBe("");
+    expect(meta!.createdAt).toBe("");
+    expect(meta!.producer).toBe("");
+    expect(meta!.dpr).toBe(0);
+    // Omitted fields emit no XML element at all.
+    const text = new TextDecoder().decode(out);
+    expect(text).not.toContain("annot:sourceUrl");
+    expect(text).not.toContain("annot:dpr");
+  });
+
+  it("XML-escapes free-text fields so markup-ish values survive", () => {
+    const url = 'https://example.com/q?a=1&b=<x>"y"</x>';
+    const out = createEditablePngBytes({
+      renderedPng: tinyPng,
+      originalImage: tinyPng,
+      annotationsSvg,
+      width: 1,
+      height: 1,
+      sourceUrl: url,
+      tags: { note: "5 < 6 && 7 > 2" },
+    });
+    const meta = readEditablePngBytes(out);
+    expect(meta!.sourceUrl).toBe(url);
+    expect(meta!.tags).toEqual({ note: "5 < 6 && 7 > 2" });
+  });
+
+  it("fractional dpr survives the round-trip", () => {
+    const out = createEditablePngBytes({
+      renderedPng: tinyPng,
+      originalImage: tinyPng,
+      annotationsSvg,
+      width: 1,
+      height: 1,
+      dpr: 1.25,
+    });
+    expect(readEditablePngBytes(out)!.dpr).toBe(1.25);
+  });
+});
+
 describe("writePngWithTagsOnly", () => {
   it("returns input bytes unchanged when tags is empty", () => {
     const out = writePngWithTagsOnly(tinyPng, {});

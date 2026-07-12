@@ -20,11 +20,14 @@ import {
   createEditablePngBytes,
   dataUrlToUint8Array,
   writeJpegWithMetadata,
+  type XmpProvenance,
 } from "./xmp-bytes.js";
 
 // Re-export Tier-A surface so existing `/xmp` consumers stay working.
 export {
+  ANNOT_XMP_VERSION,
   type AnnotMetadata,
+  type BuildXmpOptions,
   type CreateEditablePngBytesOptions,
   createEditablePngBytes,
   dataUrlToUint8Array,
@@ -32,6 +35,7 @@ export {
   readEditablePngBytes,
   WELL_KNOWN_TAG_KEYS,
   writePngWithTagsOnly,
+  type XmpProvenance,
 } from "./xmp-bytes.js";
 
 function blobToUint8Array(blob: Blob): Promise<Uint8Array> {
@@ -42,7 +46,7 @@ function blobToUint8Array(blob: Blob): Promise<Uint8Array> {
   });
 }
 
-export interface EditableImageOptions {
+export interface EditableImageOptions extends XmpProvenance {
   /** Rendered image (screenshot + annotations) as Blob */
   renderedBlob: Blob;
   /** Original capture image data URL (without annotations) */
@@ -74,6 +78,10 @@ export async function createEditableImage(opts: EditableImageOptions): Promise<B
       width: opts.width,
       height: opts.height,
       tags: opts.tags,
+      sourceUrl: opts.sourceUrl,
+      createdAt: opts.createdAt,
+      producer: opts.producer,
+      dpr: opts.dpr,
     });
     return new Blob([result as BlobPart], { type: "image/png" });
   }
@@ -83,7 +91,16 @@ export async function createEditableImage(opts: EditableImageOptions): Promise<B
   const jpegBlob = await pngBlobToJpegBlob(opts.renderedBlob, opts.width, opts.height);
   const jpegData = await blobToUint8Array(jpegBlob);
   const xmpBytes = new TextEncoder().encode(
-    buildXmp(opts.annotationsSvg, opts.width, opts.height, opts.tags),
+    buildXmp({
+      annotationsSvg: opts.annotationsSvg,
+      width: opts.width,
+      height: opts.height,
+      tags: opts.tags,
+      sourceUrl: opts.sourceUrl,
+      createdAt: opts.createdAt,
+      producer: opts.producer,
+      dpr: opts.dpr,
+    }),
   );
   const result = writeJpegWithMetadata(jpegData, xmpBytes, originalBytes);
   return new Blob([result as BlobPart], { type: "image/jpeg" });
