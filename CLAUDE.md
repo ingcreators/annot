@@ -872,8 +872,8 @@ Opt-in status across the built-ins:
 |---|---|---|---|
 | DeviceStore | ✓ | ✓ | `.annot.json` sidecar left on disk for downgrade; not read / written |
 | DesktopStore | ✓ | ✓ | Same `.annot.json` policy |
-| GitHubStore | ✓ | partial | `branchHead` tracking + cross-tab listener; full `GitHubTreeState` / `GitHubBlobCache` replacement deferred |
-| GoogleDriveStore | ✓ | partial | `changesPageToken` seeded; full `#fileMeta` / `#recordCache` / id-map replacement deferred |
+| GitHubStore | ✓ | ✓ | `GitHubBlobCache` / `#docMeta` replaced by SHA-gated `MetadataCache` rows; `GitHubTreeState` persisted + hydrated via the `treeState` namespace meta (JSON snapshot, `branchHead`-validated). Migrating the tree onto the listing layer was considered and deliberately NOT pursued — the snapshot already gives persistence + cross-tab invalidation without refactoring the sync paths |
+| GoogleDriveStore | ✓ | ✓ | `#recordCache` replaced; id maps + `#fileMeta` stay in-memory BY DESIGN (Drive-ID-keyed, on every API call's hot path). `changesPageToken` is seeded for a future Changes-API incremental sync — a feature, not cache debt |
 | BrowserStore | not applicable | n/a | Already IDB-native; second cache layer would be redundant |
 | Extension `IDBStore` | not applicable | n/a | Already IDB-native |
 
