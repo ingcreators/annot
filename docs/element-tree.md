@@ -65,8 +65,13 @@ Key shape decisions:
   pattern-match. ARIA states like `"checked"`, `"required"`,
   `"disabled"`; scalar states as `"level=2"`, `"valuetext=10"`.
 - **`attributes` lives inline on each node.** Eliminates the
-  parallel `annot:attributes` YAML block. Each capture source
-  applies its own whitelist (browser walker hard-codes one; the
+  parallel `annot:attributes` YAML block. Every capture source
+  applies the canonical `ELEMENT_TREE_ATTR_WHITELIST` from
+  `@ingcreators/annot-core/element-tree` (metadata-unification
+  Phase 7): `attributes` carries element shape (HTML attributes),
+  `states` carries element state — aria-* never appears in
+  `attributes`. The browser walker inlines a copy (MAIN-world
+  injection cannot import; a symmetry test guards it; the
   Playwright `attachAttributes` helper accepts one as an argument).
 
 ## On-disk encoding (PNG XMP iTXt chunk)

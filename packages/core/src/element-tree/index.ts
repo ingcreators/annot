@@ -4,6 +4,7 @@
 // Tier A canonical model for "what's on this page". See `./types.ts`
 // for the schema and AD-09 in the roadmap for the design rationale.
 
+export { ELEMENT_TREE_ATTR_WHITELIST } from "./attr-whitelist.js";
 export {
   parseElementTreeFromJson,
   serializeElementTreeToJson,

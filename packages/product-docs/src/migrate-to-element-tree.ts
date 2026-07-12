@@ -27,6 +27,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, resolve } from "node:path";
 
 import { type ElementTree, findByMatch, writeElementTreePng } from "@ingcreators/annot-core";
+import { ELEMENT_TREE_ATTR_WHITELIST } from "@ingcreators/annot-core/element-tree";
 import { playwrightYamlToElementTree } from "@ingcreators/annot-playwright";
 
 import { parseMdxFile } from "./mdx.js";
@@ -70,19 +71,10 @@ export interface MigrateOptions {
   attributeWhitelist?: readonly string[];
 }
 
-const DEFAULT_ATTR_WHITELIST = [
-  "type",
-  "required",
-  "placeholder",
-  "name",
-  "id",
-  "href",
-  "aria-checked",
-  "aria-expanded",
-  "aria-selected",
-  "aria-disabled",
-  "aria-invalid",
-];
+// Canonical whitelist shared by every ElementTree producer
+// (metadata-unification Phase 7). The old private copy captured
+// aria-* attributes; those now live exclusively in `states`.
+const DEFAULT_ATTR_WHITELIST = ELEMENT_TREE_ATTR_WHITELIST;
 
 /**
  * Migrate one MDX file. Reads the file, processes every screen,

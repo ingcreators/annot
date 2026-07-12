@@ -1,6 +1,6 @@
 # Metadata unification — the file tells the whole story
 
-> **Status:** In progress
+> **Status:** Done (landed 2026-07-12, PRs #1100–#1107)
 > **Compatibility:**
 >   - **Deliberately breaking.** Signed off 2026-07-12: existing
 >     annot files do NOT need to keep working — this plan cleans the

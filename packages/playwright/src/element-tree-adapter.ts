@@ -256,8 +256,12 @@ export function playwrightYamlToElementTree(opts: PlaywrightYamlToElementTreeOpt
  * resolving its `match: { role, name }` against the live page.
  */
 export interface AttachAttributesOptions {
-  /** Whitelist of HTML attribute names to capture. Same shape as
-   *  `DEFAULT_ATTR_WHITELIST` in `@ingcreators/annot-product-docs`. */
+  /** Whitelist of HTML attribute names to capture. Callers should
+   *  pass the canonical `ELEMENT_TREE_ATTR_WHITELIST` from
+   *  `@ingcreators/annot-core/element-tree` (which
+   *  `@ingcreators/annot-product-docs` re-exports as its
+   *  `DEFAULT_ATTR_WHITELIST`) unless they have a reason to
+   *  diverge. */
   whitelist: readonly string[];
 }
 
