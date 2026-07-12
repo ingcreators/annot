@@ -164,8 +164,10 @@ export class GitHubStore
    * `ImageRecord` / `DocumentRecord` rows live in IDB under
    * `MetadataCache`, version-gated by blob SHA so peer-tab edits
    * automatically invalidate. The remaining bespoke state in this
-   * store is `GitHubTreeState` (path → SHA + folder set), tracked
-   * as a follow-up phase (P9 of the shared-metadata-cache plan).
+   * store is `GitHubTreeState` (path → SHA + folder set), which
+   * is itself persisted + hydrated through the `treeState`
+   * namespace meta below — see `#hydrateTreeFromCache` /
+   * `#persistTreeState`.
    *
    * Cache-meta integration also wires:
    *
@@ -244,9 +246,12 @@ export class GitHubStore
   // The bespoke `GitHubBlobCache` + `#docMeta` were path-keyed in-
   // memory Maps without a version concept. These helpers reproduce
   // the same surface but back it with the shared `MetadataCache`
-  // SHA-gated by blob SHA (read from `GitHubTreeState` for now —
-  // P9 of the shared-metadata-cache plan migrates the tree state
-  // itself onto the listing layer). Callers continue to look like
+  // SHA-gated by blob SHA (read from `GitHubTreeState`, which is
+  // persisted as a `treeState` namespace-meta snapshot; migrating
+  // it onto the listing layer was considered and deliberately not
+  // pursued — the snapshot already gives persistence + cross-tab
+  // invalidation without refactoring the sync paths). Callers
+  // continue to look like
   // method calls on a per-instance object; the only difference
   // visible at the call site is the `await`.
 
@@ -1195,9 +1200,8 @@ export class GitHubStore
     // Try the shared cache before any network. SHA-versioned reads
     // mean a peer-tab commit that bumped the blob SHA on disk
     // automatically misses (our local `#tree` still has the old
-    // SHA until the next forceRefresh / branchHead-mismatch
-    // detection clears it; eventually the listing-cache work in
-    // P9 + Phase 5's `branchHead` listener take care of this).
+    // SHA until the branchHead-mismatch detection / the cross-tab
+    // `annot-metadata-ns-changed` listener clears it).
     const cached = await this.#cacheGetRecord(path);
     if (cached) return cached;
 
