@@ -21,7 +21,7 @@
  * those overrides are gone — the PWA's defaults apply unchanged.
  */
 
-/* `.action-btn` — used by the legacy-data notice's
+/* `.action-btn` — used by the editor error banner's
    "Open old folder" / "Dismiss" pair. The Window / Region capture
    buttons that previously also used this class moved into the
    unified New menu (via `getNewMenuExtras` on `<annot-sidebar>`),
@@ -47,10 +47,9 @@
 /*
  * Editor-mode error banner. Sits inside `#editor-view` (above
  * `#canvas-container`, below `#editor-header`) when a save /
- * mount error fires through `EditorShell.on("error", …)`. Same
- * vocabulary as `.fs-legacy-notice` so the desktop's two
- * banners stay visually consistent without dragging in PWA's
- * full `.error-bar` design system.
+ * mount error fires through `EditorShell.on("error", …)`.
+ * Deliberately lighter-weight than the PWA's full `.error-bar`
+ * design system.
  */
 #editor-error-banner {
   position: absolute;
@@ -87,8 +86,8 @@ body.editor-mode.has-right-panel #editor-error-banner {
  * `#file-manager` / `#sidebar` / `#main-content` ids mirror the
  * PWA's index.html so file-manager.css from `@ingcreators/annot-web`
  * applies unchanged. The wrapper exists so the show/hide toggle
- * (`bootstrap.ts:showGallery / hideGallery`) and the legacy-data
- * notice banner have a single sized container to attach to; with
+ * (`bootstrap.ts:showGallery / hideGallery`) has a single sized
+ * container to attach to; with
  * the old desktop-only action row gone (folded into the unified
  * New menu) the wrapper itself now does very little.
  */
@@ -114,48 +113,4 @@ body.editor-mode.has-right-panel #editor-error-banner {
   bottom: auto;
   flex: 1 1 auto;
   min-height: 0;
-}
-
-/*
- * One-time legacy-data notice banner (`#fs-legacy-data-notice`).
- * The last surface that mentions `<portable_dir>/data/` —
- * surfaces only when the SQLite db file exists from a pre-Phase-4
- * install. Stays desktop-host-local rather than living in the
- * unified gallery's design system.
- */
-.fs-legacy-notice {
-  flex: 0 0 auto;
-  display: flex;
-  gap: 16px;
-  padding: 12px 16px;
-  background: #1a2540;
-  border-bottom: 1px solid #00d4ff;
-  color: #e0e0e0;
-  font-size: 13px;
-  line-height: 1.5;
-  align-items: center;
-}
-
-.fs-legacy-notice-body {
-  flex: 1 1 auto;
-}
-
-.fs-legacy-notice-body strong {
-  display: block;
-  color: #00d4ff;
-  margin-bottom: 4px;
-}
-
-.fs-legacy-notice-path {
-  background: #0a0f1f;
-  padding: 1px 6px;
-  border-radius: 3px;
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-  font-size: 12px;
-}
-
-.fs-legacy-notice-actions {
-  flex: 0 0 auto;
-  display: flex;
-  gap: 8px;
 }

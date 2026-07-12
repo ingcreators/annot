@@ -14,15 +14,11 @@
  * Annotations, tags, and original image are stored as XMP metadata inside each file.
  * Subfolders on disk = gallery folders.
  *
- * Phase 3 of `docs/plans/shared-metadata-cache.md` — the per-store
- * `.annot.json` sidecar that older builds wrote next to the user's
- * screenshots is no longer read or written. Metadata persistence
- * is delegated to the host-supplied `MetadataCache`
- * (`IndexedDBMetadataCache` in production). The legacy
- * `.annot.json` file is **left on disk** by design: a user who
- * downgrades to a pre-Phase-3 Annot release still finds a valid
- * sidecar. A future plan can drop the legacy file once enough
- * release cycles have passed.
+ * Metadata persistence is delegated to the host-supplied
+ * `MetadataCache` (`IndexedDBMetadataCache` in production). The
+ * pre-metadata-cache `.annot.json` sidecar has no special handling
+ * anymore (metadata-unification Phase 5) — a stray one is just an
+ * unlisted non-image file.
  */
 import type {
   DocumentRecord,
@@ -62,17 +58,6 @@ import { readEditableImage } from "@ingcreators/annot-core/xmp";
 import { probeRasterDims } from "@ingcreators/annot-render/raster-dims";
 import { fileExists, getDirHandle, purgeEmptyFiles } from "./device-fs.js";
 import { buildEditableImageBlob } from "./image-encode.js";
-
-/**
- * Filename of the legacy on-disk metadata sidecar. Pre-Phase-3 Annot
- * builds wrote `images` / `documents` maps here so cold starts could
- * skip re-reading XMP from every image. The current implementation
- * ignores it for both read and write — the sidecar is left in place
- * for downgrade compatibility. Listed here so the directory walk can
- * filter it out of folder listings without surfacing it as a "file"
- * to the gallery.
- */
-const LEGACY_INDEX_FILE = ".annot.json";
 
 export class DeviceStore
   implements
@@ -226,7 +211,6 @@ export class DeviceStore
 
     for await (const [name, handle] of dir.entries()) {
       if (handle.kind === "file") {
-        if (name === LEGACY_INDEX_FILE) continue;
         if (this.#isImageFile(name)) {
           const path = joinPath(folderPath, name);
           const file = await (handle as FileSystemFileHandle).getFile();
@@ -512,7 +496,6 @@ export class DeviceStore
 
     for await (const [name, handle] of dir.entries()) {
       if (handle.kind !== "file") continue;
-      if (name === LEGACY_INDEX_FILE) continue;
       if (!this.#isImageFile(name)) continue;
       const path = joinPath(folderPath, name);
       const file = await (handle as FileSystemFileHandle).getFile();

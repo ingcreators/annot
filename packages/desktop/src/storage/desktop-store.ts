@@ -18,13 +18,10 @@
  * tags, and the original capture image are stored as XMP metadata
  * inside each file. Subfolders on disk = gallery folders 1:1.
  *
- * Phase 4 of `docs/plans/shared-metadata-cache.md` — the per-store
- * `.annot.json` sidecar that older builds wrote to the library root
- * is no longer read or written. Metadata persistence is delegated
- * to the host-supplied `MetadataCache`. The legacy file is **left
- * on disk** by design: a user who downgrades to a pre-Phase-4
- * build still finds a valid sidecar. A future plan can drop it
- * once enough release cycles have passed.
+ * Metadata persistence is delegated to the host-supplied
+ * `MetadataCache`. The pre-metadata-cache `.annot.json` sidecar
+ * has no special handling anymore (metadata-unification Phase 5)
+ * — a stray one is just an unlisted non-image file.
  */
 
 import type {
@@ -70,16 +67,6 @@ import {
   DEFAULT_DEPS,
 } from "@ingcreators/annot-web/storage/image-encode";
 import type { DesktopFs } from "./desktop-fs.js";
-
-/**
- * Legacy `.annot.json` sidecar at the library root. Pre-Phase-4
- * builds wrote `images` / `documents` maps here so cold starts
- * could skip re-reading XMP. Current code ignores it for both
- * read and write — the file is left in place for downgrade
- * compatibility. The directory-walk filters it out so it doesn't
- * surface in folder listings.
- */
-const LEGACY_INDEX_FILE = ".annot.json";
 
 /** Image-file extensions the gallery surfaces. Permissive on
  *  purpose: external screenshots dropped into the library appear
@@ -226,7 +213,6 @@ export class DesktopStore
 
     for (const entry of entries) {
       if (entry.kind === "file") {
-        if (entry.name === LEGACY_INDEX_FILE) continue;
         const path = joinPath(folderPath, entry.name);
         if (isImageFile(entry.name)) {
           const mtime = (await this.#fs.stat(path))?.mtime ?? 0;
@@ -470,7 +456,6 @@ export class DesktopStore
 
     for (const entry of entries) {
       if (entry.kind !== "file") continue;
-      if (entry.name === LEGACY_INDEX_FILE) continue;
       if (!isImageFile(entry.name)) continue;
       const path = joinPath(folderPath, entry.name);
       const stat = await this.#fs.stat(path);
