@@ -155,6 +155,63 @@ carry the double extension AND the XMP packet.**
 - `SAVE_DEBOUNCE_MS` policy moves to a shared host-ui constant
   (local 500 ms / networked 1500 ms) instead of per-host literals.
 
+### Phase 7 — ElementTree attribute / locator unification
+
+Added 2026-07-12 after the user extended the audit to DOM / locator
+metadata. `ElementTree` itself (living-spec Phase 1) is sound; the
+divergence is in what the producers put INTO it.
+
+**Findings.** The HTML-attribute whitelist exists as THREE
+divergent copies:
+
+| Producer | Whitelist |
+|---|---|
+| extension walker (`element-tree-walker.ts`) | `id name type href placeholder value data-testid data-test-id` |
+| product-docs `DEFAULT_ATTR_WHITELIST` (`fixture.ts`) | `type required placeholder maxlength minlength pattern min max step disabled readonly checked aria-required aria-disabled aria-readonly` |
+| product-docs `migrate-to-element-tree.ts` (private copy) | `type required placeholder name id href aria-checked aria-expanded aria-selected aria-disabled aria-invalid` |
+
+Consequences: the Playwright-side captures never collect
+`data-testid` — the i18n-stable match key the living-spec roadmap
+designates — while the extension side never collects form shape
+(`required` / `maxlength` / …); and aria-* state attributes are
+double-represented (they already live in `states` tokens on both
+producers).
+
+**Decisions.**
+
+1. **One canonical constant** `ELEMENT_TREE_ATTR_WHITELIST` in
+   `@ingcreators/annot-core/element-tree` (Tier A). Principle:
+   **`attributes` carries element shape (HTML attributes),
+   `states` carries element state (ARIA / dynamic)** — aria-*
+   never appears in `attributes` again. Canonical set:
+   `id name type href placeholder value required disabled readonly
+   checked maxlength minlength pattern min max step data-testid
+   data-test-id`.
+2. The extension walker's copy stays inlined (MAIN-world
+   `executeScript({func})` cannot import), guarded by a symmetry
+   unit test asserting the inlined array equals the core constant
+   (same pattern as the tool-registry write-back symmetry test).
+3. Playwright adapter / product-docs fixture / migrate all default
+   to the core constant; the per-call `attributeWhitelist` override
+   stays.
+4. **No persisted `locator` field.** A stored locator string is
+   producer-specific (Playwright syntax) and brittle across
+   captures — it would be a third identity mechanism next to
+   `ref` (within-capture) and `match: {role, name}`
+   (cross-capture, AD-09 / OQ-11). Uniform `data-testid` capture
+   gives locator-building consumers (MCP `resolve-locator`, future
+   codegen) the stable hook they actually need, resolved at use
+   time. The `locator?: string` name stays reserved in guardrail
+   §4 but deliberately unpopulated.
+5. `ElementTree.version` stays 1 — the whitelist is capture
+   policy, not schema shape; no field is renamed or removed
+   (guardrail §4 additive-only holds).
+6. Provenance precedence vs the 2.0 packet: `ElementTree.source`
+   keeps `url` / `capturedAt` (trees travel standalone as YAML);
+   inside an image file both are written from the same value, and
+   the packet is authoritative for the record. Documented in
+   `docs/metadata-format.md`.
+
 ## Out of scope (recorded, not forgotten)
 
 - **Upload post-action divergence** (desktop auto-opens the editor,
