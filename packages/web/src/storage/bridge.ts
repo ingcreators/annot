@@ -23,6 +23,7 @@ import {
   signOut as githubSignOut,
   loadRepoRef as loadGitHubRef,
   refreshCloudTokenSilently,
+  revokeCloudToken,
 } from "./github-auth.js";
 import { GitHubStore } from "./github-store.js";
 import { getAccessToken, loadDriveRoot, signIn } from "./google-auth.js";
@@ -556,8 +557,16 @@ export function getGitHubRef(): GitHubRepoRef | null {
   return loadGitHubRef();
 }
 
-/** Forget the GitHub token + ref. Does not revoke on GitHub's side. */
+/** Forget the GitHub token + ref. PAT tokens are not revoked on
+ *  GitHub's side; cloud-sourced tokens fire a best-effort
+ *  `DELETE /api/github/token` so the Worker drops the stored pair
+ *  and revokes the App grant. */
 export function disconnectGitHub(): void {
+  if (getGitHubAuthSource() === "cloud") {
+    // Fire-and-forget — local disconnect must not block on the
+    // network, and a failed revoke leaves only an inert grant.
+    void revokeCloudToken(loadCloudBaseUrl() ?? "");
+  }
   registry.githubStore = null;
   githubSignOut();
   clearGitHubRef();

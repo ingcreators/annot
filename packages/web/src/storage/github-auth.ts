@@ -323,6 +323,77 @@ export async function listWritableRepos(
 }
 
 /**
+ * List repositories reachable through the GitHub App installations
+ * the current user-to-server token can see. The cloud-source
+ * counterpart of `listWritableRepos`: user-to-server tokens
+ * enumerate exactly the repos the App authorization can reach
+ * (installation ∩ user permissions), where the affiliation-based
+ * `/user/repos` listing is PAT-shaped.
+ *
+ * Paginates both levels (`/user/installations` and each
+ * installation's `/repositories`) and filters to push access.
+ * Sorted by most-recently-pushed to mirror `listWritableRepos`.
+ */
+export async function listInstallationRepos(): Promise<GitHubRepoSummary[]> {
+  const installationIds: number[] = [];
+  let url: string | null = "/user/installations?per_page=100";
+  while (url) {
+    const { body, nextUrl } = await authedGetWithLink(url);
+    const page = body as { installations?: { id: number }[] };
+    for (const inst of page.installations ?? []) installationIds.push(inst.id);
+    url = nextUrl ? toRelativeUrl(nextUrl) : null;
+  }
+
+  const out: GitHubRepoSummary[] = [];
+  for (const id of installationIds) {
+    let repoUrl: string | null = `/user/installations/${id}/repositories?per_page=100`;
+    while (repoUrl) {
+      const { body, nextUrl } = await authedGetWithLink(repoUrl);
+      const page = body as { repositories?: GitHubRepoPayload[] };
+      for (const entry of page.repositories ?? []) {
+        if (!entry.permissions?.push) continue;
+        out.push(toRepoSummary(entry));
+      }
+      repoUrl = nextUrl ? toRelativeUrl(nextUrl) : null;
+    }
+  }
+  out.sort((a, b) => (b.pushedAt ?? "").localeCompare(a.pushedAt ?? ""));
+  return out;
+}
+
+/** GitHub App identity from the Worker (`GET /api/github/app/meta`).
+ *  Powers the "add repositories" link in the cloud-mode repo
+ *  picker (`https://github.com/apps/<slug>/installations/new`). */
+export interface CloudAppMeta {
+  slug: string;
+  appName: string;
+  htmlUrl: string;
+}
+
+/** Fetch the App meta from the Worker. Returns `null` on any
+ *  failure — the link is a nice-to-have, never a blocker. */
+export async function fetchCloudAppMeta(baseUrl: string): Promise<CloudAppMeta | null> {
+  try {
+    const res = await fetch(`${baseUrl}/api/github/app/meta`, { credentials: "include" });
+    if (!res.ok) return null;
+    const body = (await res.json()) as {
+      ok?: boolean;
+      slug?: string;
+      appName?: string;
+      htmlUrl?: string;
+    };
+    if (!body.ok || !body.slug) return null;
+    return {
+      slug: body.slug,
+      appName: body.appName ?? body.slug,
+      htmlUrl: body.htmlUrl ?? `https://github.com/apps/${body.slug}`,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Search across all of GitHub for repos matching `q` that the user
  * can access (scoped by the OAuth token). Used as a fallback when
  * the target repo is beyond the `listWritableRepos` paging window.

@@ -7,21 +7,30 @@
  * sidebar item + routing (Phase 3) call into `connectGitHub()` to
  * acquire a `GitHubRepoRef`.
  *
- * PAT-only by design. See `github-auth.ts` for why Device Flow /
- * Web Flow can't complete in a browser without a backend proxy.
+ * Two auth paths: PAT paste (the default; see `github-auth.ts` for
+ * why Device Flow / Web Flow can't complete in a browser without a
+ * backend proxy) and, when an annot.work session is plausible, the
+ * one-click GitHub App user-to-server flow via the Worker
+ * (`docs/plans/github-app-user-tokens.md`).
  *
  * Shares the `.app-dialog*` CSS tokens defined in
  * `packages/web/src/styles/file-manager.css` so the look matches
  * the rest of the app.
  */
 
+import { loadCloudBaseUrl } from "./cloud-auth.js";
 import {
+  CloudTokenError,
+  fetchCloudAppMeta,
+  fetchCloudToken,
   fetchUserInfo,
   type GitHubRepoRef,
   type GitHubRepoSummary,
+  getAuthSource,
   getRepo,
   isSignedIn,
   listBranches,
+  listInstallationRepos,
   listWritableRepos,
   loadRepoRef,
   normalizeBasePath,
@@ -205,16 +214,159 @@ function showChoiceDialog(): Promise<ReconfigureChoice | null> {
   });
 }
 
+// ---- One-click connect via annot.work (GitHub App) ----
+
+/** Whether the one-click path is worth offering: the user has
+ *  connected Annot Cloud before (persisted base URL), or this is
+ *  the hosted deploy where the same-origin Worker exists. */
+function cloudConnectAvailable(): boolean {
+  return loadCloudBaseUrl() !== null || location.hostname === "annot.work";
+}
+
+type CloudConnectOutcome =
+  | { kind: "connected" }
+  | { kind: "needs-cloud-signin" }
+  | { kind: "cancelled" }
+  | { kind: "failed"; message: string };
+
+/**
+ * Run the GitHub App user-authorization flow against the annot.work
+ * Worker. Tries `GET /api/github/token` first — an existing
+ * authorization connects with zero popups. Otherwise opens the
+ * authorize popup and waits for its `annot-github-app-connected`
+ * postMessage (with a popup-closed poll as fallback, mirroring the
+ * cloud-connect dialog in `cloud-setup-ui.ts`).
+ */
+async function runCloudConnectFlow(onStatus: (msg: string) => void): Promise<CloudConnectOutcome> {
+  const base = loadCloudBaseUrl() ?? "";
+
+  const tryFetch = async (): Promise<CloudConnectOutcome | "authorize"> => {
+    try {
+      await fetchCloudToken(base);
+      return { kind: "connected" };
+    } catch (e) {
+      if (!(e instanceof CloudTokenError)) {
+        return { kind: "failed", message: (e as Error).message };
+      }
+      if (e.code === "not_connected" || e.code === "reauth_required") return "authorize";
+      if (e.code === "transport") {
+        return { kind: "failed", message: `Couldn't reach the Annot Cloud API: ${e.message}` };
+      }
+      // no_session / expired_session / legacy_session_relogin_required
+      return { kind: "needs-cloud-signin" };
+    }
+  };
+
+  onStatus("Checking existing authorization…");
+  const first = await tryFetch();
+  if (first !== "authorize") return first;
+
+  onStatus("Waiting for GitHub…");
+  const popup = window.open(
+    `${base}/api/github/app/connect`,
+    "annot-github-connect",
+    "popup=yes,width=980,height=720",
+  );
+  if (!popup) {
+    return { kind: "failed", message: "Popup was blocked. Allow popups for this site and retry." };
+  }
+
+  const expectedOrigin = base ? new URL(base).origin : location.origin;
+  await new Promise<void>((settle) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      window.removeEventListener("message", onMessage);
+      window.clearInterval(pollTimer);
+      window.clearTimeout(timeoutTimer);
+      settle();
+    };
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== expectedOrigin) return;
+      if ((event.data as { type?: string })?.type === "annot-github-app-connected") finish();
+    };
+    window.addEventListener("message", onMessage);
+    // Poll fallback — covers blocked postMessage channels and the
+    // user just closing the popup. The final token fetch below is
+    // the authoritative success check either way.
+    const pollTimer = window.setInterval(() => {
+      if (popup.closed) finish();
+    }, 1000);
+    const timeoutTimer = window.setTimeout(finish, 5 * 60 * 1000);
+  });
+  try {
+    popup.close();
+  } catch {
+    /* cross-origin close refusal — ignore */
+  }
+
+  onStatus("Finalizing…");
+  const second = await tryFetch();
+  if (second === "authorize") {
+    // Still not authorized — the user closed the popup without
+    // approving. Treat as a cancel, not an error.
+    return { kind: "cancelled" };
+  }
+  return second;
+}
+
 // ---- PAT sign-in ----
 
 function runPatFlow(): Promise<boolean> {
   return new Promise((resolve) => {
     const { close, root, body } = openDialog(
       "Sign in to GitHub",
-      "Annot stores screenshots by committing them to a repository you " +
-        "own or collaborate on. Create a personal access token and " +
-        "paste it below.",
+      "Annot stores screenshots by committing them to a repository you " + "own or collaborate on.",
     );
+
+    // One-click path via the annot.work Worker (GitHub App
+    // user-to-server tokens). Rendered above the PAT form when the
+    // deploy plausibly has a cloud session; PAT stays the default
+    // everywhere else (self-host / static deploys).
+    if (cloudConnectAvailable()) {
+      const cloudBtn = document.createElement("button");
+      cloudBtn.type = "button";
+      cloudBtn.className = "app-dialog-btn app-dialog-primary";
+      cloudBtn.style.width = "100%";
+      cloudBtn.style.padding = "10px 14px";
+      cloudBtn.style.height = "auto";
+      cloudBtn.textContent = "Connect with annot.work";
+      body.appendChild(cloudBtn);
+
+      const cloudStatus = document.createElement("div");
+      cloudStatus.style.fontSize = "12px";
+      cloudStatus.style.color = "var(--annot-text-secondary)";
+      cloudStatus.style.minHeight = "16px";
+      body.appendChild(cloudStatus);
+
+      cloudBtn.addEventListener("click", async () => {
+        cloudBtn.disabled = true;
+        const outcome = await runCloudConnectFlow((msg) => {
+          cloudStatus.textContent = msg;
+        });
+        cloudBtn.disabled = false;
+        if (outcome.kind === "connected") {
+          close();
+          resolve(true);
+          return;
+        }
+        if (outcome.kind === "needs-cloud-signin") {
+          cloudStatus.textContent =
+            "Sign in to Annot Cloud first (sidebar → Annot Cloud), then retry.";
+          return;
+        }
+        cloudStatus.textContent = outcome.kind === "failed" ? outcome.message : "";
+      });
+
+      const divider = document.createElement("div");
+      divider.style.fontSize = "11px";
+      divider.style.color = "var(--annot-text-secondary)";
+      divider.style.textAlign = "center";
+      divider.style.margin = "4px 0";
+      divider.textContent = "— or paste a personal access token —";
+      body.appendChild(divider);
+    }
 
     const help = document.createElement("div");
     help.style.fontSize = "12px";
@@ -326,10 +478,16 @@ function runPatFlow(): Promise<boolean> {
 // ---- Repo picker ----
 
 function showRepoPicker(userLogin: string): Promise<GitHubRepoSummary | null> {
+  // Cloud-sourced tokens (GitHub App user-to-server) enumerate
+  // exactly the repos the App authorization reaches; the
+  // affiliation-based /user/repos listing is PAT-shaped.
+  const cloudSource = getAuthSource() === "cloud";
   return new Promise((resolve) => {
     const { close, root, body } = openDialog(
       "Pick a repository",
-      `Signed in as ${userLogin}. Showing repositories you can push to.`,
+      cloudSource
+        ? `Connected as ${userLogin} via annot.work. Showing repositories the GitHub App can reach.`
+        : `Signed in as ${userLogin}. Showing repositories you can push to.`,
     );
 
     const search = document.createElement("input");
@@ -376,6 +534,24 @@ function showRepoPicker(userLogin: string): Promise<GitHubRepoSummary | null> {
     rotateRow.style.marginTop = "4px";
     rotateRow.innerHTML = `<a href="#" style="color:var(--annot-accent);">Use a different personal access token</a>`;
     body.appendChild(rotateRow);
+
+    if (cloudSource) {
+      // "Add repositories" escape hatch — the App only reaches repos
+      // its installation covers, so the fix for a missing repo lives
+      // on GitHub's installation settings, not in this picker. The
+      // link needs the App slug from the Worker; inserted async and
+      // silently skipped when the meta endpoint is unavailable.
+      const manageRow = document.createElement("div");
+      manageRow.style.fontSize = "12px";
+      manageRow.style.marginTop = "4px";
+      body.insertBefore(manageRow, rotateRow);
+      void fetchCloudAppMeta(loadCloudBaseUrl() ?? "").then((meta) => {
+        if (!meta) return;
+        manageRow.innerHTML = `<a href="https://github.com/apps/${encodeURIComponent(
+          meta.slug,
+        )}/installations/new" target="_blank" rel="noopener noreferrer" style="color:var(--annot-accent);">Add repositories on GitHub ↗</a> <span style="color:var(--annot-text-secondary);">then reopen this picker</span>`;
+      });
+    }
     rotateRow.querySelector("a")?.addEventListener("click", async (e) => {
       e.preventDefault();
       close();
@@ -492,11 +668,15 @@ function showRepoPicker(userLogin: string): Promise<GitHubRepoSummary | null> {
 
     renderStatus("Loading repositories…");
 
-    listWritableRepos().then(
+    const emptyMsg = cloudSource
+      ? "No repositories reachable via the GitHub App. Use the link below to add some."
+      : "No repositories with push access found.";
+    const listRepos = cloudSource ? listInstallationRepos : listWritableRepos;
+    listRepos().then(
       (fetched) => {
         repos = fetched;
         filtered = fetched;
-        renderRows(filtered, "No repositories with push access found.");
+        renderRows(filtered, emptyMsg);
       },
       (e: Error) => {
         err.textContent = e.message;
@@ -511,7 +691,7 @@ function showRepoPicker(userLogin: string): Promise<GitHubRepoSummary | null> {
       window.clearTimeout(searchTimer);
       if (!q) {
         filtered = repos;
-        renderRows(filtered, "No repositories with push access found.");
+        renderRows(filtered, emptyMsg);
         return;
       }
       const local = repos.filter((r) => r.fullName.toLowerCase().includes(q));

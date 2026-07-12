@@ -62,7 +62,15 @@ const EMBED_GITHUB_APP_MANIFEST = {
     active: true,
   },
   redirect_url: "https://annot.work/api/embed/setup/callback",
-  callback_urls: ["https://annot.work/api/embed/setup/callback"],
+  // Two callback URLs: the manifest-flow redirect target AND the
+  // GitHub App user-authorization callback (one-click GitHub
+  // connect — docs/plans/github-app-user-tokens.md). Apps
+  // registered before the second entry existed need it added
+  // manually on the App settings page.
+  callback_urls: [
+    "https://annot.work/api/embed/setup/callback",
+    "https://annot.work/api/github/app/callback",
+  ],
   setup_url: "https://annot.work/api/embed/setup",
   setup_on_update: true,
   public: false,
@@ -90,7 +98,7 @@ function buildManifestForRequest(reqUrl: string): typeof EMBED_GITHUB_APP_MANIFE
       active: true,
     },
     redirect_url: `${origin}/api/embed/setup/callback`,
-    callback_urls: [`${origin}/api/embed/setup/callback`],
+    callback_urls: [`${origin}/api/embed/setup/callback`, `${origin}/api/github/app/callback`],
     setup_url: `${origin}/api/embed/setup`,
   };
 }
