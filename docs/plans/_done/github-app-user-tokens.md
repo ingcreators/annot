@@ -1,7 +1,22 @@
 # GitHub App user-to-server tokens (one-click GitHub connect)
 
-> **Status:** Queued (approach signed off 2026-07-12; merge
-> authorization granted for the plan PR + every phase PR).
+> **Status:** Done (landed 2026-07-12 — plan
+> [#1115](https://github.com/ingcreators/annot/pull/1115), Worker
+> endpoints [#1116](https://github.com/ingcreators/annot/pull/1116),
+> web auth-source plumbing
+> [#1117](https://github.com/ingcreators/annot/pull/1117), connect
+> UI + installation-scoped picker
+> [#1118](https://github.com/ingcreators/annot/pull/1118), docs
+> wrap-up in the same session).
+>
+> **Operator note (one-time, production App):** on the GitHub App
+> settings page, add
+> `https://annot.work/api/github/app/callback` to the callback
+> URLs and confirm "Expire user authorization tokens" is enabled,
+> then apply migration 0006 via the usual `apply-migrations`
+> workflow. Self-host Apps registered through `/api/embed/setup`
+> after #1118 come out pre-configured (the manifest carries both
+> callback URLs).
 >
 > **Compatibility:** Additive. The PAT paste path stays exactly
 > as-is — it remains the only auth path for self-hosted / static

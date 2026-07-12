@@ -287,10 +287,19 @@ packages/
   worker/       Cloudflare Worker serving `annot.work/api/*` (Hono).
                 GitHub + Google OAuth, KV sessions, multi-tenant D1
                 (`users` / `workspaces` / `images` / `documents` /
-                `share_links` / `github_installations`), R2 object
-                storage, share + embed endpoints, and the GitHub App
-                embed round-trip (`src/embed/`: load / commit /
-                webhook / setup — living-spec 5y / 5z). D1 migrations
+                `share_links` / `github_installations` /
+                `github_user_tokens`), R2 object storage, share +
+                embed endpoints, the GitHub App embed round-trip
+                (`src/embed/`: load / commit / webhook / setup —
+                living-spec 5y / 5z), and the GitHub App
+                user-to-server token flow powering the PWA's
+                one-click GitHub connect (`src/github-user-token.ts`:
+                `/api/github/app/connect|callback|success|meta` +
+                `GET|DELETE /api/github/token` with server-side
+                refresh grants — see
+                `docs/plans/_done/github-app-user-tokens.md`; the
+                PAT paste path in `packages/web` stays the
+                self-host fallback). D1 migrations
                 in `migrations/`; deploy + migration-apply run from
                 `.github/workflows/{deploy,apply-migrations}.yml`.
                 Private (workspace-only).
