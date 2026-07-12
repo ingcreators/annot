@@ -32,6 +32,19 @@ import { generateThumbnailFromDataUrl } from "../image-thumbnail.js";
 import type { AnnotSaveStatusElement } from "../save-status-indicator.js";
 import type { ThumbnailManager } from "../thumbnail-manager.js";
 
+/** Dirty → autosave debounce for local-disk / in-browser backends
+ *  (Browser / Device / Desktop). Short: writes are cheap and the
+ *  user expects near-immediate persistence.
+ *  Shared policy constant (metadata-unification Phase 6) — hosts
+ *  pass these to `scheduleAnnotationSave` instead of re-deriving
+ *  per-host literals. */
+export const SAVE_DEBOUNCE_LOCAL_MS = 500;
+
+/** Dirty → autosave debounce for network-backed stores
+ *  (GitHub / Google Drive). Longer so rapid edit bursts coalesce
+ *  into fewer remote writes (each one is a commit / API call). */
+export const SAVE_DEBOUNCE_NETWORKED_MS = 1500;
+
 export interface SavePipelineDeps {
   getStorage(): StorageProvider | null;
   getCanvas(): CanvasManager | null;

@@ -35,7 +35,10 @@ import {
 import { getFilename, type ImageRecord } from "@ingcreators/annot-core/storage";
 import { estimateDataUrlBytes } from "@ingcreators/annot-host-ui";
 import { HeaderHost } from "@ingcreators/annot-host-ui/orchestrators/header-host";
-import { SavePipeline } from "@ingcreators/annot-host-ui/orchestrators/save-pipeline";
+import {
+  SAVE_DEBOUNCE_LOCAL_MS,
+  SavePipeline,
+} from "@ingcreators/annot-host-ui/orchestrators/save-pipeline";
 import { StatusHost } from "@ingcreators/annot-host-ui/orchestrators/status-host";
 import { Toolbar } from "@ingcreators/annot-host-ui/toolbar";
 import { showConfirmDialog } from "@ingcreators/annot-host-ui/ui/dialog";
@@ -383,14 +386,14 @@ function openEditor(record: ImageRecord): void {
   });
 
   // ---- Dirty → debounced autosave ----------------------------
-  // Local-only DesktopStore — 500 ms is fine. Network-backed stores
-  // (Drive / GitHub) use 1500 ms in the PWA; the desktop never
-  // sees those, so we don't need the conditional.
-  const SAVE_DEBOUNCE_MS = 500;
+  // Local-only DesktopStore — the shared local-tier policy from
+  // save-pipeline.ts. Network-backed stores use
+  // SAVE_DEBOUNCE_NETWORKED_MS in the PWA; the desktop never sees
+  // those, so no conditional here.
   const unsubDirty = shell.on("dirty", () => {
     const status = headerHost.getSaveStatusIndicator();
     if (status) status.status = "pending";
-    savePipeline.scheduleAnnotationSave(SAVE_DEBOUNCE_MS);
+    savePipeline.scheduleAnnotationSave(SAVE_DEBOUNCE_LOCAL_MS);
     // Phase 6 of `docs/plans/_done/redact-burn-into-image.md` — keep
     // the right-panel's apply-redactions button in sync with the
     // document's redact-element count. The count drops to 0
@@ -518,18 +521,17 @@ function surfaceEditorError(label: string, err: unknown): void {
  */
 function surfaceSaveError(message: string, retry?: () => void): void {
   console.error("[desktop] save error:", message);
-  showBannerMessage(message);
-  if (retry) {
-    // Retry surfaces would need a button on the banner; for now
-    // the user-facing path is "edit again to retry" (any new edit
-    // re-arms the autosave debounce). Keep the retry callback
-    // available so a future banner refresh can wire it up
-    // without touching SavePipeline.
-    void retry;
-  }
+  showBannerMessage(message, retry);
 }
 
-function showBannerMessage(message: string): void {
+/** Retry callback for the banner's Retry button. Re-assigned on
+ *  every `showBannerMessage` call so the single delegated click
+ *  handler always fires the latest failed save's retry —
+ *  PWA-parity for SavePipeline's `onSaveError(message, retry)`
+ *  (metadata-unification Phase 6). */
+let bannerRetry: (() => void) | null = null;
+
+function showBannerMessage(message: string, retry?: () => void): void {
   let banner = document.getElementById("editor-error-banner");
   if (!banner) {
     banner = document.createElement("div");
@@ -537,12 +539,22 @@ function showBannerMessage(message: string): void {
     banner.setAttribute("role", "alert");
     banner.innerHTML =
       '<span id="editor-error-banner-message"></span>' +
+      '<button class="action-btn" id="editor-error-banner-retry" type="button">Retry</button>' +
       '<button class="action-btn" id="editor-error-banner-dismiss" type="button">Dismiss</button>';
     document.getElementById("editor-view")!.appendChild(banner);
+    banner.querySelector("#editor-error-banner-retry")!.addEventListener("click", () => {
+      const fn = bannerRetry;
+      hideEditorError();
+      fn?.();
+    });
     banner
       .querySelector("#editor-error-banner-dismiss")!
       .addEventListener("click", () => hideEditorError());
   }
+  bannerRetry = retry ?? null;
+  (banner.querySelector("#editor-error-banner-retry") as HTMLElement).style.display = retry
+    ? ""
+    : "none";
   banner.querySelector("#editor-error-banner-message")!.textContent = message;
   banner.classList.add("visible");
 }
