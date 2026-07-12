@@ -1,5 +1,15 @@
 # @ingcreators/annot-product-docs-astro
 
+## 0.5.0
+
+### Minor Changes
+
+- **Breaking:** removed the deprecated `./playwright` re-export
+  subpath (announced via the import-time `DeprecationWarning`
+  shipped since 0.4.0). Import `test` / `expect` /
+  `patchScreenshot` from `@ingcreators/annot-product-docs` (MDX
+  support) or `@ingcreators/annot-playwright` (without) instead.
+
 ## 0.4.0
 
 ### Minor Changes

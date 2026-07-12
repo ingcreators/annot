@@ -95,7 +95,8 @@ PNG verbatim with `hadBoundingBoxes: false`.
 > `@ingcreators/annot-product-docs-astro/playwright` moved out
 > of this package as part of
 > [`docs/plans/_done/playwright-screenshot-fixture-relayer.md`](https://github.com/ingcreators/annot/blob/main/docs/plans/_done/playwright-screenshot-fixture-relayer.md)
-> (Phases 1–4). Code authoring a Playwright spec should pick
+> (Phases 1–4), and the deprecated re-export subpath was REMOVED
+> in 0.5.0. Code authoring a Playwright spec should pick
 > one of the two canonical homes:
 
 | Use case | Import |

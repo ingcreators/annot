@@ -24,22 +24,14 @@ function copyAstroComponents(): PluginOption {
 }
 
 // Vite library build for `@ingcreators/annot-product-docs-astro`.
-// Phase 2 of `docs/plans/living-product-docs.md`. Multi-entry
-// library mode emits BOTH `dist/index.js` (the main entry
-// re-exporting the Astro integration + Image Service +
-// component types) AND `dist/playwright/index.js` (the
-// `page.screenshot({ annot })` Playwright fixture from
-// `_done/playwright-screenshot-annot-fixture.md`).
-//
-// The `./playwright` subpath was declared in `package.json`'s
-// `publishConfig.exports` from day one, but the original
-// single-entry `lib.entry` only built `dist/index.js`. The
-// `0.1.0` + `0.2.0` tarballs accordingly shipped
-// `dist/playwright/*.d.ts` (via the `dts` plugin's source
-// glob) but NOT the runtime `dist/playwright/index.js` — any
-// consumer doing `import { test } from
-// "@ingcreators/annot-product-docs-astro/playwright"` got
-// a "Cannot find module" error at runtime.
+// Phase 2 of `docs/plans/living-product-docs.md`. Emits
+// `dist/index.js` — the main entry re-exporting the Astro
+// integration + Image Service + component types. (The deprecated
+// `./playwright` re-export subpath was removed in 0.5.0 per the
+// DeprecationWarning it shipped since Phase 4 of
+// `_done/playwright-screenshot-fixture-relayer.md`; import from
+// `@ingcreators/annot-product-docs` or
+// `@ingcreators/annot-playwright` instead.)
 //
 // `astro` is declared as a peer dependency — npm consumers
 // bring their own Astro install. Workspace deps stay external
@@ -59,7 +51,6 @@ export default defineConfig({
     lib: {
       entry: {
         index: resolve(__dirname, "src/index.ts"),
-        "playwright/index": resolve(__dirname, "src/playwright/index.ts"),
       },
       formats: ["es"],
     },

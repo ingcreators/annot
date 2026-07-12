@@ -3,8 +3,8 @@
 //
 // Phase 1 PR 3 of `docs/plans/living-product-docs.md`. Renamed
 // from `screen` / `captureScreen` in Phase 3 of
-// `docs/plans/playwright-screenshot-fixture-relayer.md` — old
-// names ship as deprecated back-compat aliases.
+// `docs/plans/playwright-screenshot-fixture-relayer.md`; the
+// deprecated back-compat aliases were removed in 0.5.0.
 //
 // Extends the `@ingcreators/annot-playwright` fixture (so callers
 // still get `annotator` + the `rectForBoundingBox` / `arrowBetween`
@@ -64,27 +64,9 @@ export interface ProductDocsSyncOptions {
   attributeWhitelist?: readonly string[];
 }
 
-/**
- * @deprecated Renamed to {@link ProductDocsSyncOptions} in Phase 3
- * of `docs/plans/playwright-screenshot-fixture-relayer.md` for
- * naming clarity (the helper synchronizes the MDX comment blocks
- * with the live UI — it does not take a screenshot). The old name
- * keeps working but new code should use `ProductDocsSyncOptions`.
- */
-export type ScreenCaptureOptions = ProductDocsSyncOptions;
-
 export interface ProductDocs {
   sync(opts: ProductDocsSyncOptions): Promise<void>;
 }
-
-/**
- * @deprecated Renamed to {@link ProductDocs} in Phase 3 of
- * `docs/plans/playwright-screenshot-fixture-relayer.md`. The old
- * `Screen` name is ambiguous (collides with `@testing-library/react`'s
- * `screen` + reads like a Playwright built-in). New code should
- * use `ProductDocs`.
- */
-export type Screen = ProductDocs;
 
 /**
  * HTML attributes captured into the `annot:attributes` block by
@@ -117,25 +99,11 @@ export const DEFAULT_ATTR_WHITELIST: readonly string[] = ELEMENT_TREE_ATTR_WHITE
  * });
  * ```
  *
- * For back-compat the same fixture is also exposed as `screen`
- * with a `.capture()` method (deprecated since Phase 3 of the
- * relayer plan; remove after the documented deprecation window).
  */
-export const test = annotatorTest.extend<{ productDocs: ProductDocs; screen: ProductDocs }>({
+export const test = annotatorTest.extend<{ productDocs: ProductDocs }>({
   productDocs: async ({ page }, use) => {
     await use({
       sync: (opts: ProductDocsSyncOptions) => syncProductDocs(page, opts),
-    });
-  },
-  // Deprecated alias. The function literal is necessary because the
-  // fixture body cannot reference `productDocs` directly (the
-  // Playwright resolver constructs each fixture fresh per test
-  // worker). We construct a parallel surface and expose `sync` AND
-  // its old name `capture` — same closure either way.
-  screen: async ({ page }, use) => {
-    const syncFn = (opts: ProductDocsSyncOptions) => syncProductDocs(page, opts);
-    await use({ sync: syncFn, capture: syncFn } as ProductDocs & {
-      capture: typeof syncFn;
     });
   },
 });
@@ -187,16 +155,6 @@ export async function syncProductDocs(page: Page, opts: ProductDocsSyncOptions):
   });
   await writeFile(opts.mdxPath, updated, "utf8");
 }
-
-/**
- * @deprecated Renamed to {@link syncProductDocs} in Phase 3 of
- * `docs/plans/playwright-screenshot-fixture-relayer.md`. The old
- * name reads as if a screenshot is captured; the function
- * actually synchronizes MDX comment blocks. The deprecated alias
- * is a reference-equality re-export of the new implementation so
- * `===` checks across the rename boundary keep working.
- */
-export const captureScreen = syncProductDocs;
 
 /**
  * Walk the overlays in a `<Screen>`, resolve each one's `match`
