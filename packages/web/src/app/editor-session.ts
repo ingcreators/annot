@@ -853,5 +853,6 @@ function synthesizeShellRecord(
     tags: {},
     createdAt: now,
     updatedAt: now,
+    producer: "web",
   } as ImageRecord;
 }

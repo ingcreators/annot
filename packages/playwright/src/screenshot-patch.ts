@@ -106,6 +106,17 @@ function pageFor(self: Page | Locator): Page {
   return isLocator(self) ? self.page() : self;
 }
 
+/** Defensive `page.url()` — minimal Page stand-ins (test fakes,
+ *  exotic receivers) may not implement it; provenance is best-effort
+ *  and must never fail the screenshot. */
+function safePageUrl(page: Page): string {
+  try {
+    return typeof page.url === "function" ? page.url() : "";
+  } catch {
+    return "";
+  }
+}
+
 /**
  * Wraps the original `screenshot` call with the annot pipeline.
  * `this` is `Page` or `Locator` — handled uniformly modulo the
@@ -165,6 +176,7 @@ async function runAnnotMode(
     editable,
     clip,
     contributions,
+    sourceUrl: safePageUrl(pageFor(this)),
   });
 
   // 7. Write to `path` if given. Mirrors vanilla `page.screenshot`.
@@ -218,6 +230,9 @@ interface ComposeOutputOptions {
    *  here with the page-space dimensions. Each contribution's
    *  annotations are merged into the output. */
   contributions: AnnotSourceContribution[];
+  /** Page URL at screenshot time — written into the editable
+   *  output's `annot:sourceUrl` (XMP schema 2.0). */
+  sourceUrl: string;
 }
 
 /**
@@ -291,6 +306,9 @@ async function composeOutput(opts: ComposeOutputOptions): Promise<Uint8Array> {
       width: dims.width,
       height: dims.height,
       tags: annot.tags,
+      sourceUrl: opts.sourceUrl,
+      createdAt: new Date().toISOString(),
+      producer: "playwright",
     });
   }
 

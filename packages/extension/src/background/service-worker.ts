@@ -150,6 +150,8 @@ async function openEditorWithFrame(frame: CaptureFrame, sourceUrl: string): Prom
     createdAt: now,
     updatedAt: now,
     elementTree: frame.elementTree ?? undefined,
+    producer: "extension",
+    dpr: frame.elementTree?.viewport.scale || undefined,
   });
 
   const extId = chrome.runtime.id;
@@ -186,6 +188,8 @@ async function saveAsScrollSession(frame: CaptureFrame, sourceUrl: string): Prom
     createdAt: now,
     updatedAt: now,
     elementTree: frame.elementTree,
+    producer: "extension",
+    dpr: frame.elementTree?.viewport.scale || undefined,
   });
   await openOrReuseAnnotTab(chrome.runtime.id, sessionId);
 }
@@ -221,6 +225,8 @@ async function saveAsPerPageSession(frames: CaptureFrame[], sourceUrl: string): 
       createdAt: now,
       updatedAt: now,
       elementTree: frame.elementTree,
+      producer: "extension",
+      dpr: frame.elementTree?.viewport.scale || undefined,
     });
   }
 
@@ -688,6 +694,8 @@ async function hotkeyCaptureShot(firedTab?: chrome.tabs.Tab): Promise<void> {
       createdAt: ts,
       updatedAt: ts,
       elementTree: tree ?? undefined,
+      producer: "extension",
+      dpr: dpr || tree?.viewport.scale || undefined,
     });
 
     hotkeyState.count += 1;
@@ -1091,6 +1099,8 @@ async function performAutoCapture(opts: { kind: "observer" | "probe" | "manual" 
       createdAt: ts,
       updatedAt: ts,
       elementTree: tree ?? undefined,
+      producer: "extension",
+      dpr: tree?.viewport.scale || undefined,
     });
 
     autoState.count += 1;

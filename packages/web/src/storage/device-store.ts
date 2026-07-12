@@ -288,7 +288,11 @@ export class DeviceStore
       const bytes = new Uint8Array(await file.arrayBuffer());
       const meta = readEditableImage(bytes);
       const previous = await this.#c().getImage(this.#ns(), path, version);
-      const createdAt = previous?.createdAt ?? new Date(file.lastModified).toISOString();
+      // The packet is the authority for provenance (schema 2.0);
+      // the cache entry is refreshed FROM it. Pre-2.0 files fall
+      // back to the previous cache entry, then to the file mtime.
+      const createdAt =
+        meta?.createdAt || previous?.createdAt || new Date(file.lastModified).toISOString();
       const rec: ImageRecord = {
         path,
         folderPath: getParentPath(path),
@@ -298,10 +302,12 @@ export class DeviceStore
         annotationsSvg: "",
         width: meta?.width ?? 0,
         height: meta?.height ?? 0,
-        sourceUrl: previous?.sourceUrl ?? "",
+        sourceUrl: meta?.sourceUrl || previous?.sourceUrl || "",
         tags: meta?.tags ?? {},
         createdAt,
         updatedAt: new Date(file.lastModified).toISOString(),
+        producer: meta?.producer || undefined,
+        dpr: meta?.dpr || undefined,
       };
       await this.#cachePutImage(path, version, rec);
     } catch {
@@ -386,6 +392,10 @@ export class DeviceStore
       width: data.width,
       height: data.height,
       tags: data.tags,
+      sourceUrl: data.sourceUrl,
+      createdAt: data.createdAt,
+      producer: data.producer,
+      dpr: data.dpr,
     };
     const blob = await this.#buildXmpBlob(record, isJpeg ? "jpg" : "png");
 
@@ -450,7 +460,10 @@ export class DeviceStore
       // cache is cold or missed.
       const version = String(file.lastModified);
       const cached = await this.#c().getImage(this.#ns(), path, version);
-      const createdAt = cached?.createdAt ?? new Date(file.lastModified).toISOString();
+      // The packet is the authority for provenance (schema 2.0);
+      // the cache is a fallback for pre-2.0 files only.
+      const createdAt =
+        meta?.createdAt || cached?.createdAt || new Date(file.lastModified).toISOString();
       // No XMP packet (an external image dropped into the folder):
       // probe the real pixel dimensions — a 0×0 record mounts a 0×0
       // canvas svg (blank editor) since the shell sizes the canvas
@@ -465,10 +478,12 @@ export class DeviceStore
         annotationsSvg: meta?.annotationsSvg || "",
         width: meta?.width || probed?.width || 0,
         height: meta?.height || probed?.height || 0,
-        sourceUrl: cached?.sourceUrl ?? "",
+        sourceUrl: meta?.sourceUrl || cached?.sourceUrl || "",
         tags: meta?.tags || {},
         createdAt,
         updatedAt: new Date(file.lastModified).toISOString(),
+        producer: meta?.producer || undefined,
+        dpr: meta?.dpr || undefined,
       };
     } catch {
       return undefined;

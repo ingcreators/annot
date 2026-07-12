@@ -106,6 +106,10 @@ export class ExtensionTransferHost {
                 // path (which is how the extension typically hands
                 // screenshots over).
                 elementTree: full.elementTree,
+                // Provenance travels with the record — the transfer
+                // must not relabel an extension capture as a web one.
+                producer: full.producer,
+                dpr: full.dpr,
               },
               { filename },
             ),
@@ -159,7 +163,10 @@ export class ExtensionTransferHost {
       sourceUrl: record.sourceUrl || "",
       tags: record.tags || {},
       folderPath: this.deps.getCurrentFolderPath(),
-      createdAt: now,
+      // Preserve the capture moment — `now` here would relabel the
+      // handoff copy with the transfer time (metadata-unification:
+      // createdAt is provenance, not a write timestamp).
+      createdAt: record.createdAt || now,
       updatedAt: now,
       // Carry the canonical screen-capture tree through the
       // single-record handoff so the Elements right-panel section is
@@ -168,6 +175,10 @@ export class ExtensionTransferHost {
       // reopening from the gallery later goes through `getImage`,
       // which only sees what was actually persisted here).
       elementTree: record.elementTree,
+      // Provenance travels with the record — the transfer must not
+      // relabel an extension capture as a web one.
+      producer: record.producer,
+      dpr: record.dpr,
     });
 
     this.deps.setCurrentImagePath(savedPath);

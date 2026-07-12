@@ -42,19 +42,27 @@ export interface AnnotatorInput {
 
 /**
  * Input for {@link Annotator.toEditablePng}. Same shape as
- * {@link AnnotatorInput} plus optional opaque kv `tags` written into
- * the embedded XMP for provenance / debugging.
+ * {@link AnnotatorInput} plus optional opaque kv `tags` and the
+ * schema-2.0 provenance fields written into the embedded XMP.
  *
- * Soft-convention key names (not validated by the writer; documented
- * in `@ingcreators/annot-core/xmp-bytes`'s `WELL_KNOWN_TAG_KEYS`):
- * - `source` — what produced the PNG (`"docs-tour"`, `"playwright-fixture"`, `"annot-mcp"`).
- * - `screen` — for living-product-docs, the `<Screen id>` value.
- * - `capturedAt` — ISO timestamp.
- * - `commit` — git SHA when applicable.
+ * Since XMP schema 2.0 (`docs/metadata-format.md`), provenance has
+ * first-class fields — prefer `sourceUrl` / `createdAt` / `producer`
+ * / `dpr` over smuggling the equivalent through `tags` (`source` /
+ * `capturedAt` from the old `WELL_KNOWN_TAG_KEYS` convention).
+ * `screen` / `commit` remain tags.
  */
 export interface EditableInput extends AnnotatorInput {
   /** Optional opaque kv tags. */
   tags?: Record<string, string>;
+  /** URL of the captured page, when applicable. */
+  sourceUrl?: string;
+  /** ISO timestamp of the capture moment. */
+  createdAt?: string;
+  /** What produced the PNG (`"annotator"` / `"mcp"` / `"playwright"`
+   *  / a caller-supplied identifier). Defaults to `"annotator"`. */
+  producer?: string;
+  /** devicePixelRatio at capture time, when known. */
+  dpr?: number;
 }
 
 /** Annotator construction options. All optional. */
@@ -213,6 +221,10 @@ export function createAnnotator(options: AnnotatorOptions = {}): Annotator {
         width: input.width,
         height: input.height,
         tags: input.tags,
+        sourceUrl: input.sourceUrl,
+        createdAt: input.createdAt,
+        producer: input.producer || "annotator",
+        dpr: input.dpr,
       });
     },
     async toEncoded(input: AnnotatorInput, encodeOptions?: EncodeOptions): Promise<EncodeResult> {
