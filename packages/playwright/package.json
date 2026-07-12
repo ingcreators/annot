@@ -1,6 +1,6 @@
 {
   "name": "@ingcreators/annot-playwright",
-  "version": "0.4.2",
+  "version": "0.5.0",
   "description": "Playwright fixture for annotated screenshots — emit annotated PNGs from failing tests without leaving the test file. Pairs `test.extend({ annotator })` with the headless renderer from @ingcreators/annot-annotator.",
   "license": "Apache-2.0",
   "author": "ingcreators",

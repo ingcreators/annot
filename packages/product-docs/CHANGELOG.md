@@ -1,5 +1,16 @@
 # @ingcreators/annot-product-docs
 
+## 0.5.1
+
+### Patch Changes
+
+- Updated dependencies
+- Updated dependencies
+- Updated dependencies
+  - @ingcreators/annot-annotator@0.7.0
+  - @ingcreators/annot-core@0.4.0
+  - @ingcreators/annot-playwright@0.5.0
+
 ## 0.5.0
 
 ### Minor Changes
