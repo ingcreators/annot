@@ -151,7 +151,7 @@ describe("FileManager — storage-switch racing path", () => {
     // production `handleStorageSelect` follows.
     const store = new BrowserStore();
     const path = await saveTestRecord(store, makeRecord("fixture.png", ""));
-    expect(path).toBe("fixture.png");
+    expect(path).toBe("fixture.annot.png");
 
     const sidebarHost = document.createElement("div");
     const mainHost = document.createElement("div");
@@ -177,7 +177,7 @@ describe("FileManager — storage-switch racing path", () => {
 
     const items = mainHost.querySelectorAll<HTMLElement>(".gallery-item");
     const paths = Array.from(items).map((el) => el.dataset["imagePath"]);
-    expect(paths).toEqual(["fixture.png"]);
+    expect(paths).toEqual(["fixture.annot.png"]);
   });
 
   it("switches storages mid-session and shows the new storage's files (Browser \u2192 second backend)", async () => {
@@ -215,7 +215,7 @@ describe("FileManager — storage-switch racing path", () => {
       Array.from(mainHost.querySelectorAll<HTMLElement>(".gallery-item")).map(
         (el) => el.dataset["imagePath"],
       ),
-    ).toEqual(["from-browser.png"]);
+    ).toEqual(["from-browser.annot.png"]);
 
     // Now swap to a DIFFERENT storage backend (not BrowserStore)
     // with a different fixture and re-run the production
@@ -293,6 +293,6 @@ describe("FileManager — storage-switch racing path", () => {
     const paths = Array.from(items).map((el) => el.dataset["imagePath"]);
     // The image lives at `Sub/deep.png`; navigation should
     // reveal it without losing it to the racing rebuild.
-    expect(paths).toContain("Sub/deep.png" satisfies ImageRecord["path"]);
+    expect(paths).toContain("Sub/deep.annot.png" satisfies ImageRecord["path"]);
   });
 });

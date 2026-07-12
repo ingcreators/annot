@@ -53,7 +53,10 @@ import {
   uniquifyFilename,
   validateName,
 } from "@ingcreators/annot-core/storage";
-import { defaultAnnotImageFilename } from "@ingcreators/annot-core/utils";
+import {
+  defaultAnnotImageFilename,
+  normalizeAnnotImageFilename,
+} from "@ingcreators/annot-core/utils";
 import {
   createGitHubApiClient,
   type GitHubApiClient,
@@ -1137,7 +1140,9 @@ export class GitHubStore
     const folderPath = data.folderPath || "";
 
     const isJpeg = data.originalDataUrl.startsWith("data:image/jpeg");
-    const desired = opts?.filename || defaultAnnotImageFilename(data.originalDataUrl);
+    const desired = opts?.filename
+      ? normalizeAnnotImageFilename(opts.filename)
+      : defaultAnnotImageFilename(data.originalDataUrl);
     validateName(desired);
 
     const filename = uniquifyFilename(desired, (candidate) => {

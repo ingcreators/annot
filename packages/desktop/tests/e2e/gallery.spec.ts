@@ -57,6 +57,9 @@ test("Upload Files… imports a PNG to disk and opens it in the editor", async (
 
   // Browsing at the gallery root, the import lands in Inbox/ under
   // the suggested filename, written as a real PNG on disk.
-  const saved = await readFile(libraryFile(userData, INBOX, "uploaded.png"));
+  // saveImage normalizes the stored name to the .annot.<ext> double
+  // extension (metadata-unification Phase 4) so every host, including
+  // the vscode custom editor, recognizes the file as Annot-managed.
+  const saved = await readFile(libraryFile(userData, INBOX, "uploaded.annot.png"));
   expect([...saved.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
 });

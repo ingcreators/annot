@@ -81,18 +81,18 @@ describe("DeviceStore × MetadataCache — `.annot.json` is ignored", () => {
     await writable.close();
 
     // Save an actual image so the store has something legitimate to find.
-    await store.saveImage(makePayload(), { filename: "real.png" });
+    await store.saveImage(makePayload(), { filename: "real.annot.png" });
 
     await store.init();
 
     const list = await store.listImages("");
-    expect(list.map((r) => r.path).sort()).toEqual(["real.png"]);
+    expect(list.map((r) => r.path).sort()).toEqual(["real.annot.png"]);
   });
 
   it("save / update do not regenerate `.annot.json` on disk", async () => {
     const { root, store } = buildStore();
-    await store.saveImage(makePayload(), { filename: "x.png" });
-    await store.updateImage("x.png", { tags: { source: "test" } });
+    await store.saveImage(makePayload(), { filename: "x.annot.png" });
+    await store.updateImage("x.annot.png", { tags: { source: "test" } });
     // No `.annot.json` should have appeared.
     let hasIndex = false;
     for await (const [name] of (root as unknown as FileSystemDirectoryHandle).entries()) {

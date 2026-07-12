@@ -54,7 +54,10 @@ import {
   uniquifyFilenameAsync,
   validateName,
 } from "@ingcreators/annot-core/storage";
-import { defaultAnnotImageFilename } from "@ingcreators/annot-core/utils";
+import {
+  defaultAnnotImageFilename,
+  normalizeAnnotImageFilename,
+} from "@ingcreators/annot-core/utils";
 import { readEditableImage } from "@ingcreators/annot-core/xmp";
 import { parseDocumentMetaCheap } from "@ingcreators/annot-doc/headless";
 // Deep subpath (not the barrel) so the storage chunk doesn't pull
@@ -353,7 +356,9 @@ export class DesktopStore
 
   async saveImage(data: Omit<ImageRecord, "path">, opts?: { filename?: string }): Promise<string> {
     const isJpeg = data.originalDataUrl.startsWith("data:image/jpeg");
-    const desiredFilename = opts?.filename || defaultAnnotImageFilename(data.originalDataUrl);
+    const desiredFilename = opts?.filename
+      ? normalizeAnnotImageFilename(opts.filename)
+      : defaultAnnotImageFilename(data.originalDataUrl);
     validateName(desiredFilename);
     const folderPath = data.folderPath || "";
 

@@ -15,6 +15,7 @@ export {
   defaultAnnotFilenameStem,
   defaultAnnotImageFilename,
   formatLocalTimestamp,
+  normalizeAnnotImageFilename,
 } from "./filename.js";
 export { newIdB58 } from "./id.js";
 // `tauri-bridge` symbols moved to the dedicated
