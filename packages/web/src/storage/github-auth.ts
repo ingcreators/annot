@@ -22,6 +22,8 @@
 
 const TOKEN_KEY = "annot-github-token";
 const REF_KEY = "annot-github-ref";
+const AUTH_SOURCE_KEY = "annot-github-auth-source";
+const TOKEN_EXPIRES_KEY = "annot-github-token-expires-at";
 
 const GITHUB_API = "https://api.github.com";
 
@@ -76,15 +78,157 @@ export function isSignedIn(): boolean {
 }
 
 /** Forget the access token. Does NOT revoke the token on GitHub's
- * side — users can do that from github.com/settings/tokens. */
+ * side — users can do that from github.com/settings/tokens (PAT)
+ * or github.com/settings/apps/authorizations (cloud). Keeps the
+ * auth source so a reconnect can offer the same path first. */
 export function signOut(): void {
   accessToken = null;
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(TOKEN_EXPIRES_KEY);
 }
 
 function persistToken(token: string): void {
   accessToken = token;
   localStorage.setItem(TOKEN_KEY, token);
+}
+
+// ---- Auth source (PAT vs annot.work cloud) ----
+
+/**
+ * Where the current bearer token came from:
+ *   - `"pat"`   — hand-pasted personal access token (the default,
+ *     and the only path on self-hosted / static deployments).
+ *   - `"cloud"` — GitHub App user-to-server token minted by the
+ *     annot.work Worker (`GET /api/github/token`). Short-lived
+ *     (8 h); silently refreshable server-side while the cloud
+ *     session + App authorization stay valid.
+ *
+ * Everything downstream of `getAccessToken()` is source-agnostic —
+ * both flavours are bearer tokens on `api.github.com`.
+ */
+export type GitHubAuthSource = "pat" | "cloud";
+
+export function getAuthSource(): GitHubAuthSource {
+  return localStorage.getItem(AUTH_SOURCE_KEY) === "cloud" ? "cloud" : "pat";
+}
+
+function setAuthSource(source: GitHubAuthSource): void {
+  localStorage.setItem(AUTH_SOURCE_KEY, source);
+}
+
+/** Unix ms when the persisted cloud token expires, or null for PAT
+ *  tokens / non-expiring tokens. Advisory — the real authority is
+ *  GitHub's 401, which routes through the token refresher. */
+export function getTokenExpiresAt(): number | null {
+  const raw = localStorage.getItem(TOKEN_EXPIRES_KEY);
+  if (!raw) return null;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Error from the cloud token endpoint carrying the Worker's
+ *  error code so callers can branch re-auth vs retry vs connect. */
+export class CloudTokenError extends Error {
+  /** `no_session` (cloud cookie dead) / `not_connected` (user never
+   *  authorized the App) / `reauth_required` (refresh token dead) /
+   *  `transport` (network / 5xx — retryable). */
+  readonly code: string;
+  constructor(code: string, message: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
+/** Result of a successful cloud token fetch. */
+export interface CloudTokenResult {
+  token: string;
+  expiresAt: number | null;
+  githubLogin: string | null;
+}
+
+/**
+ * Fetch a currently-valid user-to-server token from the annot.work
+ * Worker (`GET /api/github/token`, cookie-authenticated; the Worker
+ * refreshes server-side when the stored token is near expiry).
+ * Persists the token + expiry and flips the auth source to
+ * `"cloud"` on success.
+ *
+ * `baseUrl` is the cloud API base (empty string = same-origin,
+ * matching `AnnotCloudStore`); callers pass
+ * `loadCloudBaseUrl() ?? ""` from `cloud-auth.ts`.
+ */
+export async function fetchCloudToken(baseUrl: string): Promise<CloudTokenResult> {
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl}/api/github/token`, { credentials: "include" });
+  } catch (e) {
+    throw new CloudTokenError("transport", (e as Error).message);
+  }
+  if (!res.ok) {
+    let code = "transport";
+    let message = `GitHub token endpoint failed: ${res.status}`;
+    try {
+      const body = (await res.json()) as { error?: string; message?: string };
+      if (body.error) code = body.error;
+      if (body.message) message = body.message;
+    } catch {
+      /* non-JSON body — keep transport defaults */
+    }
+    // The Worker's session-auth 401s (`no_session` / `expired_session`)
+    // and the token-flow 401 (`reauth_required`) both surface here
+    // with their own codes; 5xx stays "transport" so callers retry.
+    if (res.status >= 500) code = "transport";
+    throw new CloudTokenError(code, message);
+  }
+  const body = (await res.json()) as {
+    token: string;
+    expiresAt: number | null;
+    githubLogin: string | null;
+  };
+  persistToken(body.token);
+  setAuthSource("cloud");
+  if (body.expiresAt != null) {
+    localStorage.setItem(TOKEN_EXPIRES_KEY, String(body.expiresAt));
+  } else {
+    localStorage.removeItem(TOKEN_EXPIRES_KEY);
+  }
+  return {
+    token: body.token,
+    expiresAt: body.expiresAt ?? null,
+    githubLogin: body.githubLogin ?? null,
+  };
+}
+
+/**
+ * Silent-refresh flavour of `fetchCloudToken` for the 401-driven
+ * token refresher: returns the new token, or `null` when the
+ * failure needs user action (cloud session gone, authorization
+ * revoked, network down). Never throws.
+ */
+export async function refreshCloudTokenSilently(baseUrl: string): Promise<string | null> {
+  try {
+    const { token } = await fetchCloudToken(baseUrl);
+    return token;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Best-effort disconnect on the Worker side (`DELETE
+ * /api/github/token` — drops the stored pair + revokes the grant).
+ * Local sign-out is the caller's job (`signOut()`); this only
+ * clears the server side so a later `fetchCloudToken` starts clean.
+ */
+export async function revokeCloudToken(baseUrl: string): Promise<void> {
+  try {
+    await fetch(`${baseUrl}/api/github/token`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+  } catch {
+    /* best-effort */
+  }
 }
 
 // ---- Personal Access Token sign-in ----
@@ -124,6 +268,11 @@ export async function signInWithPat(pat: string): Promise<string> {
     throw new Error(`GitHub /user check failed: ${res.status} ${res.statusText}`);
   }
   persistToken(trimmed);
+  // A validated paste is an explicit source switch — a stale
+  // "cloud" marker would send the 401 refresher to the Worker for
+  // a token the user just replaced.
+  setAuthSource("pat");
+  localStorage.removeItem(TOKEN_EXPIRES_KEY);
   return trimmed;
 }
 
