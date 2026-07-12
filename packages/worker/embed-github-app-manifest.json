@@ -6,7 +6,10 @@
     "active": true
   },
   "redirect_url": "https://annot.work/api/embed/setup/callback",
-  "callback_urls": ["https://annot.work/api/embed/setup/callback"],
+  "callback_urls": [
+    "https://annot.work/api/embed/setup/callback",
+    "https://annot.work/api/github/app/callback"
+  ],
   "setup_url": "https://annot.work/api/embed/setup",
   "setup_on_update": true,
   "public": false,

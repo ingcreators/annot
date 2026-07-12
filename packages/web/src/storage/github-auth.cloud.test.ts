@@ -8,10 +8,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   CloudTokenError,
+  fetchCloudAppMeta,
   fetchCloudToken,
   getAccessToken,
   getAuthSource,
   getTokenExpiresAt,
+  listInstallationRepos,
   refreshCloudTokenSilently,
   revokeCloudToken,
   signInWithPat,
@@ -165,6 +167,93 @@ describe("auth-source switching", () => {
     expect(getAccessToken()).toBeNull();
     expect(getTokenExpiresAt()).toBeNull();
     expect(getAuthSource()).toBe("cloud");
+  });
+});
+
+describe("listInstallationRepos", () => {
+  it("flattens paginated installations into a pushed-at-sorted, push-filtered repo list", async () => {
+    // Sign in first so authedGetWithLink has a token.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => jsonResponse({ login: "octocat" })),
+    );
+    await signInWithPat("ghp_x");
+
+    const repo = (fullName: string, push: boolean, pushedAt: string) => ({
+      full_name: fullName,
+      name: fullName.split("/")[1],
+      owner: { login: fullName.split("/")[0] },
+      default_branch: "main",
+      private: false,
+      description: null,
+      permissions: { push },
+      pushed_at: pushedAt,
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        if (url.includes("/user/installations?")) {
+          return jsonResponse({ installations: [{ id: 11 }, { id: 22 }] });
+        }
+        if (url.includes("/user/installations/11/repositories")) {
+          return jsonResponse({
+            repositories: [
+              repo("acme/older", true, "2026-01-01T00:00:00Z"),
+              repo("acme/read-only", false, "2026-06-01T00:00:00Z"),
+            ],
+          });
+        }
+        if (url.includes("/user/installations/22/repositories")) {
+          return jsonResponse({
+            repositories: [repo("octocat/newer", true, "2026-05-01T00:00:00Z")],
+          });
+        }
+        throw new Error(`Unexpected fetch: ${url}`);
+      }),
+    );
+
+    const repos = await listInstallationRepos();
+    expect(repos.map((r) => r.fullName)).toEqual(["octocat/newer", "acme/older"]);
+  });
+});
+
+describe("fetchCloudAppMeta", () => {
+  it("returns the App identity from the Worker", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        expect(url).toBe("/api/github/app/meta");
+        return jsonResponse({
+          ok: true,
+          slug: "annot-cloud-editor",
+          appName: "Annot Cloud Editor",
+          htmlUrl: "https://github.com/apps/annot-cloud-editor",
+        });
+      }),
+    );
+    const meta = await fetchCloudAppMeta("");
+    expect(meta).toEqual({
+      slug: "annot-cloud-editor",
+      appName: "Annot Cloud Editor",
+      htmlUrl: "https://github.com/apps/annot-cloud-editor",
+    });
+  });
+
+  it("returns null on any failure (never throws)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("boom", { status: 500 })),
+    );
+    expect(await fetchCloudAppMeta("")).toBeNull();
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("offline");
+      }),
+    );
+    expect(await fetchCloudAppMeta("")).toBeNull();
   });
 });
 
