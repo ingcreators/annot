@@ -30,7 +30,7 @@ allowBuilds:
 # Add a new entry when a tool starts being declared identically by
 # 3+ packages.
 catalog:
-  typescript: ^6.0.3
+  typescript: ^7.0.2
   vite: ^8.1.3
 
 # Security-advisory overrides for transitive dependencies we don't
