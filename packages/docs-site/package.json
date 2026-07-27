@@ -28,8 +28,8 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.4",
-    "@playwright/test": "^1.61.1",
+    "@playwright/test": "^1.62.0",
     "typescript": "catalog:",
-    "wrangler": "^4.107.0"
+    "wrangler": "^4.114.0"
   }
 }
