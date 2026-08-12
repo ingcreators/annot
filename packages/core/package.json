@@ -88,7 +88,7 @@
     "vite-plugin-dts": "^5.0.3"
   },
   "dependencies": {
-    "js-yaml": "^4.2.0",
+    "js-yaml": "^4.3.1",
     "pako": "^3.0.1"
   }
 }
