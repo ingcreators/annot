@@ -63,9 +63,9 @@
   "dependencies": {
     "@ingcreators/annot-annotator": "workspace:*",
     "@ingcreators/annot-product-docs": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.0.0",
-    "@napi-rs/canvas": "^1.0.2",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@napi-rs/canvas": "^1.0.6",
     "pixelmatch": "^7.1.0",
-    "playwright-core": "^1.61.1"
+    "playwright-core": "^1.62.1"
   }
 }

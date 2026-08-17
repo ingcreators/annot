@@ -63,9 +63,9 @@
     "vite-plugin-dts": "^5.0.3"
   },
   "dependencies": {
-    "@napi-rs/canvas": "^1.0.2",
+    "@napi-rs/canvas": "^1.0.6",
     "@resvg/resvg-js": "^2.6.2",
-    "@xmldom/xmldom": "^0.9.10",
+    "@xmldom/xmldom": "^0.9.11",
     "pako": "^3.0.1",
     "pixelmatch": "^7.1.0"
   }
