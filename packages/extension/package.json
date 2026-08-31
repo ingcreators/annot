@@ -28,11 +28,11 @@
     "lit": "^3.3.3"
   },
   "devDependencies": {
-    "@playwright/test": "^1.61.1",
+    "@playwright/test": "^1.62.1",
     "@resvg/resvg-js": "^2.6.2",
     "@types/node": "^26",
-    "@storybook/web-components-vite": "^10.4.6",
-    "chrome-types": "^0.1.433",
+    "@storybook/web-components-vite": "^10.5.10",
+    "chrome-types": "^0.1.440",
     "typescript": "catalog:",
     "vite": "catalog:"
   }
