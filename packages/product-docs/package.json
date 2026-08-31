@@ -75,7 +75,7 @@
     "@ingcreators/annot-core": "workspace:*",
     "@ingcreators/annot-playwright": "workspace:*",
     "js-yaml": "^4.2.0",
-    "playwright-core": "^1.61.1",
+    "playwright-core": "^1.62.1",
     "remark-frontmatter": "^5.0.0",
     "remark-mdx": "^3.1.1",
     "remark-parse": "^11.0.0",
