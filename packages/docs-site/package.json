@@ -24,7 +24,7 @@
     "@ingcreators/annot-product-docs": "workspace:*",
     "@ingcreators/annot-product-docs-astro": "workspace:*",
     "astro": "^7.0.6",
-    "sharp": "^0.35.3"
+    "sharp": "^0.35.4"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.4",
