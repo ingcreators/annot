@@ -23,7 +23,7 @@
     "@types/node": "^26",
     "typescript": "catalog:",
     "vite": "catalog:",
-    "vite-plugin-dts": "^5.0.3"
+    "vite-plugin-dts": "^5.1.0"
   },
   "dependencies": {
     "@ingcreators/annot-core": "workspace:*"
