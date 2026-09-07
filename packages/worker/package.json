@@ -36,13 +36,13 @@
     "hono": "^4.12.28"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260708.1",
+    "@cloudflare/workers-types": "^5.20260903.1",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^26.1.1",
+    "@types/node": "^26.4.1",
     "better-sqlite3": "^12.11.1",
-    "esbuild": "^0.28.1",
-    "miniflare": "^4.20260701.0",
+    "esbuild": "^0.28.2",
+    "miniflare": "^4.20260730.0",
     "typescript": "catalog:",
-    "wrangler": "^4.107.0"
+    "wrangler": "^4.129.0"
   }
 }
